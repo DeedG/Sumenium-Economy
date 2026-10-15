@@ -29,7 +29,8 @@ jobs:
           echo "eula=true" > run/eula.txt
           printf "online-mode=false\nlevel-type=minecraft\\:flat\ngenerate-structures=false\n" > run/server.properties
           timeout 600 gradle runSelftest --stacktrace || true
-          while IFS= read -r line; do echo "::notice title=selftest::$line"; done < run/selftest.txt
+          echo "::notice title=selftest::$(head -1 run/selftest.txt) — $(grep -c '^OK' run/selftest.txt) vérifications OK"
+          grep '^ECHEC' run/selftest.txt | while IFS= read -r line; do echo "::error title=selftest::$line"; done
           grep -iE "mixin.*(error|fail)|exception" run/logs/latest.log | head -20 | while IFS= read -r line; do echo "::warning title=log::$line"; done
           grep -q "SELFTEST OK" run/selftest.txt
       - name: Logs du serveur

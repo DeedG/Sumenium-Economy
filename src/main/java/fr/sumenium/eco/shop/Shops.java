@@ -655,7 +655,10 @@ public final class Shops {
 	 * @return message d'erreur, ou null si tout s'est bien passé
 	 */
 	public String create(ServerPlayer p, Shop.Kind kind, long price, int quantity, String serviceName, boolean admin) {
-		BlockPos pos = target(p);
+		return create(p, target(p), kind, price, quantity, serviceName, admin);
+	}
+
+	public String create(ServerPlayer p, BlockPos pos, Shop.Kind kind, long price, int quantity, String serviceName, boolean admin) {
 		ServerLevel level = p.level();
 		if (pos == null || !isShopBlock(level.getBlockState(pos))) return "Regarde un coffre ou un tonneau.";
 		if (find(level, pos) != null) return "Ce coffre est déjà une boutique.";
