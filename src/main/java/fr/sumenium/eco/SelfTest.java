@@ -309,7 +309,13 @@ final class SelfTest {
 		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.TORCH, 1));
 		check(out, cmdBox.equals(Shops.target(seller)), "commande : le joueur regarde bien le tonneau (" + Shops.target(seller) + ")");
 		var dispatcher = server.getCommands().getDispatcher();
-		var source = seller.createCommandSourceStack();
+		List<String> feedback = new ArrayList<>();
+		var source = seller.createCommandSourceStack().withSource(new net.minecraft.commands.CommandSource() {
+			@Override public void sendSystemMessage(Component c) { feedback.add(c.getString()); }
+			@Override public boolean acceptsSuccess() { return true; }
+			@Override public boolean acceptsFailure() { return true; }
+			@Override public boolean shouldInformAdmins() { return false; }
+		});
 		for (String cmd : new String[] {"boutique creer item 10 4", "boutique info", "boutique liste", "boutique panneau", "boutique",
 				"compte", "historique", "baltop", "baltop factions", "faction", "faction liste", "bon verifier"}) {
 			try {
@@ -322,7 +328,8 @@ final class SelfTest {
 				SumeniumEco.LOGGER.error("selftest /" + cmd, e);
 			}
 		}
-		check(out, SumeniumEco.shops().at(level, cmdBox) != null, "boutique créée par la commande");
+		check(out, SumeniumEco.shops().at(level, cmdBox) != null, "boutique créée par la commande : "
+				+ (feedback.isEmpty() ? "" : feedback.get(0)));
 
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();
