@@ -142,6 +142,7 @@ final class SelfTest {
 		box.setItem(0, new ItemStack(net.minecraft.world.item.Items.BREAD, 40));
 
 		Shop shop = SumeniumEco.shops().at(level, chest);
+		SumeniumEco.shops().refreshStock(shop); // le vendeur vient de remplir le coffre
 		check(out, shop.hasSign() && shop.signZ == signPos.getZ(), "panneau rattaché automatiquement");
 		var signBe = (net.minecraft.world.level.block.entity.SignBlockEntity) level.getBlockEntity(signPos);
 		var lines = signBe.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT).getMessages(false);
