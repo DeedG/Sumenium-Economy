@@ -307,6 +307,7 @@ final class SelfTest {
 		seller.setYRot(0f);
 		seller.setXRot(30f);
 		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.TORCH, 1));
+		ds.balance += 100_000;
 		check(out, cmdBox.equals(Shops.target(seller)), "commande : le joueur regarde bien le tonneau (" + Shops.target(seller) + ")");
 		var dispatcher = server.getCommands().getDispatcher();
 		List<String> feedback = new ArrayList<>();
