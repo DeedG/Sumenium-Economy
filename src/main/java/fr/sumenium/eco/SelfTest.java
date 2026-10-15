@@ -178,6 +178,66 @@ final class SelfTest {
 		check(out, SumeniumEco.txlog().find(tx -> true, 100).size() >= 4, "journal rempli");
 		SumeniumEco.exporter().exportAll();
 		check(out, Files.exists(SumeniumEco.gameDir().resolve("sumenium-data/export/boutiques.json")), "export écrit");
+
+		// Entonnoir sous une boutique : ne doit rien aspirer
+		BlockPos chest2 = base.south(2);
+		level.setBlock(chest2, Blocks.CHEST.defaultBlockState(), 3);
+		level.setBlock(chest2.below(), Blocks.HOPPER.defaultBlockState(), 3);
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.COAL, 1));
+		err = SumeniumEco.shops().create(seller, chest2, Shop.Kind.ITEM, 100, 1, null, false);
+		Shops.container(level, chest2).setItem(0, new ItemStack(net.minecraft.world.item.Items.COAL, 10));
+		var hopper = (net.minecraft.world.level.block.entity.HopperBlockEntity) level.getBlockEntity(chest2.below());
+		net.minecraft.world.level.block.entity.HopperBlockEntity.suckInItems(level, hopper);
+		check(out, err == null && hopper.isEmpty()
+				&& Items.count(Shops.container(level, chest2), new ItemStack(net.minecraft.world.item.Items.COAL)) == 10,
+				"entonnoir bloqué sous une boutique");
+
+		// Sommeil : un joueur AFK ne compte pas
+		var sleep = new net.minecraft.server.players.SleepStatus();
+		Afk.markForTest(buyer.getUUID());
+		sleep.update(List.of(seller, buyer));
+		check(out, sleep.sleepersNeeded(100) == 1, "AFK ignoré pour dormir (besoin : " + sleep.sleepersNeeded(100) + ")");
+		Afk.forget(buyer);
+		sleep.update(List.of(seller, buyer));
+		check(out, sleep.sleepersNeeded(100) == 2, "sans AFK, les deux comptent");
+
+		// Reprise Savs avec des fichiers d'exemple
+		try {
+			var dir = SumeniumEco.gameDir().resolve("config/savs-common-economy");
+			Files.createDirectories(dir);
+			Files.writeString(dir.resolve("balances.json"), """
+					{"00000000-0000-0000-0000-0000000000c1": {"name": "Ancien", "balance": 2723.5, "version": 3}}""");
+			Files.writeString(dir.resolve("shops.json"), """
+					{"shops": [
+					 {"shopId": "s1", "worldId": "minecraft:overworld", "chestLocation": {"x": 10, "y": 100, "z": 10},
+					  "ownerId": "00000000-0000-0000-0000-0000000000c1", "ownerName": "Ancien", "type": "ADMIN",
+					  "itemId": "minecraft:lapis_ore", "itemCount": 1,
+					  "itemStackSnbt": "H4sIAAAAAAAA/+NiYOBgYMpMYRDOzcxLTS5KTCuxykksyCyOzy9KZWZgTc4vzSthYGBgZAAAMbIK/CoAAAA=",
+					  "price": "5.0", "buying": true, "stock": 1728},
+					 {"shopId": "s2", "worldId": "minecraft:overworld", "chestLocation": {"x": 12, "y": 100, "z": 10},
+					  "ownerId": "00000000-0000-0000-0000-0000000000c1", "ownerName": "Ancien", "type": "PLAYER",
+					  "itemId": "minecraft:enchanted_book", "itemCount": 1,
+					  "itemStackSnbt": "H4sIAAAAAAAA/03MMQqAMBBE0dEgSGoLGy/iZULcRAyaXdHN/VUQtJjq88YCLeoU0OfEkQ4/6xiZFs8ag5tEVoOGpLACqCwsSd6FI+tpMXzmVDlu8NL8dIPu19O2OpVCy/Nz7wKck+ykeQAAAA==",
+					  "price": "350.0", "buying": false, "stock": 2},
+					 {"shopId": "s3", "worldId": "minecraft:overworld", "chestLocation": {"x": 14, "y": 100, "z": 10},
+					  "ownerId": "00000000-0000-0000-0000-0000000000c1", "ownerName": "Ancien", "type": "ADMIN",
+					  "itemId": "minecraft:paper", "itemCount": 1, "itemStackSnbt": null,
+					  "price": "150.0", "buying": false, "stock": 0}
+					]}""");
+			List<String> report = SavsImport.run(true, true);
+			PlayerData old = SumeniumEco.accounts().player("00000000-0000-0000-0000-0000000000c1", "Ancien");
+			Shop lapis = SumeniumEco.store().shops.get(Shop.key("minecraft:overworld", 10, 100, 10));
+			Shop book = SumeniumEco.store().shops.get(Shop.key("minecraft:overworld", 12, 100, 10));
+			check(out, old.balance == 272_350, "Savs : solde repris " + old.balance);
+			check(out, lapis != null && lapis.kind == Shop.Kind.FISC_RACHAT && lapis.price == 500
+					&& "minecraft:lapis_ore".equals(lapis.itemId), "Savs : rachat FISC lapis à 5");
+			check(out, book != null && book.kind == Shop.Kind.ITEM && book.price == 35_000
+					&& Items.decode(book.item).has(DataComponents.STORED_ENCHANTMENTS), "Savs : livre enchanté repris avec ses enchantements");
+			check(out, !SumeniumEco.store().shops.containsKey(Shop.key("minecraft:overworld", 14, 100, 10)), "Savs : certificat papier ignoré");
+			out.add("INFO " + String.join(" / ", report));
+		} catch (Exception e) {
+			out.add("ECHEC Savs : " + e);
+		}
 	}
 
 	private static void check(List<String> out, boolean cond, String label) {

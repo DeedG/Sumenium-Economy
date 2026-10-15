@@ -65,6 +65,11 @@ public final class Afk {
 		}
 	}
 
+	/** Pour le test de démarrage uniquement. */
+	static void markForTest(UUID id) {
+		AFK.add(id);
+	}
+
 	public static void forget(ServerPlayer p) {
 		AFK.remove(p.getUUID());
 	}
