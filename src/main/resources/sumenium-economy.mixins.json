@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "fr.sumenium.eco.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"SleepStatusMixin",
+		"ServerPlayerMixin",
+		"HopperBlockEntityMixin",
+		"ServerExplosionMixin",
+		"TransportItemTargetMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

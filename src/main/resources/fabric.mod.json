@@ -1,0 +1,26 @@
+{
+	"schemaVersion": 1,
+	"id": "sumenium-economy",
+	"version": "${version}",
+	"name": "Suménium Economy",
+	"description": "Économie, FISC, boutiques, factions et AFK du serveur Suménium. 100 % côté serveur.",
+	"authors": ["DeedG"],
+	"contact": {
+		"sources": "https://github.com/DeedG/Sumenium-Economy"
+	},
+	"license": "MIT",
+	"environment": "server",
+	"entrypoints": {
+		"main": ["fr.sumenium.eco.SumeniumEco"]
+	},
+	"mixins": ["sumenium-economy.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"breaks": {
+		"savs-common-economy": "*"
+	}
+}
