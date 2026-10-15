@@ -299,7 +299,8 @@ final class SelfTest {
 		depot.setItem(1, bon2.copy());
 		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(w4), Direction.UP, w4, false));
 		SumeniumEco.shops().tickWatchers(server);
-		check(out, !bon2.isEmpty() && depot.getItem(1).isEmpty(), "dépôt : bon consommé à la fermeture (parcours complet)");
+		check(out, !bon2.isEmpty() && depot.getItem(1).isEmpty(), "dépôt : bon consommé à la fermeture (parcours complet) bon2=" + bon2 + " slot1=" + depot.getItem(1)
+						+ " solde=" + ds.balance);
 
 		// Fin des signaux : on simule le passage du temps (plusieurs impulsions éteintes d'un coup)
 		try {
