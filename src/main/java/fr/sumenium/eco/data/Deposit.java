@@ -8,6 +8,8 @@ public final class Deposit {
 	public int x, y, z;
 	public long created;
 	public long used;
+	/** Panneau explicatif posé à la création (null si aucun). */
+	public Integer signX, signY, signZ;
 
 	public String posKey() {
 		return Shop.key(world, x, y, z);

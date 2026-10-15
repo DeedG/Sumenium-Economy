@@ -117,6 +117,24 @@ final class ShopSigns {
 		return new Component[] {l1, l2, l3, l4};
 	}
 
+	/** Panneau d'un dépôt de service. */
+	static void writeDeposit(ServerLevel level, BlockPos pos, fr.sumenium.eco.data.Deposit d, ChatFormatting color) {
+		if (!(level.getBlockEntity(pos) instanceof SignBlockEntity sign)) return;
+		Component[] lines = {
+				Component.literal("DÉPÔT").withStyle(color, ChatFormatting.BOLD),
+				Component.literal(cut(d.serviceName)),
+				Component.literal("Pose ton bon").withStyle(ChatFormatting.DARK_GREEN),
+				Component.literal("puis referme").withStyle(ChatFormatting.DARK_GREEN)
+		};
+		SignText text = new SignText(List.of(lines), List.of(lines), DyeColor.BLACK, false);
+		sign.setText(text, SignTextSlot.FRONT);
+		sign.setText(text, SignTextSlot.BACK);
+		sign.setWaxed(true);
+		sign.setChanged();
+		BlockState state = level.getBlockState(pos);
+		level.sendBlockUpdated(pos, state, state, 3);
+	}
+
 	/** Un panneau affiche environ 15 caractères par ligne. */
 	private static String cut(String s) {
 		if (s == null) return "";

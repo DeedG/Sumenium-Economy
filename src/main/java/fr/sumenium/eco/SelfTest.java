@@ -280,6 +280,26 @@ final class SelfTest {
 				"dépôt : bon accepté, consommé, signal émis " + (derr == null ? "" : derr));
 		depot.setItem(0, bon.copy());
 		check(out, !SumeniumEco.shops().checkDeposit(depo, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
+		check(out, depo != null && depo.signX != null && level.getBlockState(new BlockPos(depo.signX, depo.signY, depo.signZ))
+				.getBlock() instanceof net.minecraft.world.level.block.SignBlock, "dépôt : panneau explicatif posé");
+		// vrai parcours joueur : clic sur le dépôt, bon déposé, fermeture détectée par la tâche régulière
+		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(w4), Direction.UP, w4, false));
+		SumeniumEco.shops().onChat(seller, "x"); // rien en attente côté chat
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.TORCH, 1));
+		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(ss), Direction.UP, ss, false));
+		SumeniumEco.shops().onChat(seller, "1");
+		ItemStack bon2 = ItemStack.EMPTY;
+		for (int i = 0; i < seller.getInventory().getContainerSize(); i++) {
+			if (Shops.voucherId(seller.getInventory().getItem(i)) != null) {
+				bon2 = seller.getInventory().getItem(i).copy();
+				seller.getInventory().setItem(i, ItemStack.EMPTY);
+			}
+		}
+		depot.setItem(0, ItemStack.EMPTY);
+		depot.setItem(1, bon2.copy());
+		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(w4), Direction.UP, w4, false));
+		SumeniumEco.shops().tickWatchers(server);
+		check(out, !bon2.isEmpty() && depot.getItem(1).isEmpty(), "dépôt : bon consommé à la fermeture (parcours complet)");
 
 		// Fin des signaux : on simule le passage du temps (plusieurs impulsions éteintes d'un coup)
 		try {

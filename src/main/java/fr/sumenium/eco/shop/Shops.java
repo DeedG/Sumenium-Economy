@@ -98,6 +98,7 @@ public final class Shops {
 		for (Shop s : store.shops.values()) index(s);
 		for (Deposit d : store.deposits.values()) {
 			index.computeIfAbsent(d.world, w -> new LongOpenHashSet()).add(BlockPos.asLong(d.x, d.y, d.z));
+			if (d.signX != null) index.get(d.world).add(BlockPos.asLong(d.signX, d.signY, d.signZ));
 		}
 	}
 
@@ -157,6 +158,16 @@ public final class Shops {
 		}
 		BlockPos other = connectedHalf(level, pos);
 		if (other != null && indexed(level, other)) return store.deposits.get(Shop.key(w, other.getX(), other.getY(), other.getZ()));
+		return null;
+	}
+
+	/** Dépôt dont ce bloc est le panneau. */
+	public Deposit depositBySign(Level level, BlockPos pos) {
+		if (!indexed(level, pos)) return null;
+		String w = world(level);
+		for (Deposit d : store.deposits.values()) {
+			if (d.signX != null && d.world.equals(w) && d.signX == pos.getX() && d.signY == pos.getY() && d.signZ == pos.getZ()) return d;
+		}
 		return null;
 	}
 
@@ -322,6 +333,13 @@ public final class Shops {
 			}
 			return InteractionResult.SUCCESS;
 		}
+		Deposit depSign = depositBySign(level, pos);
+		if (depSign != null) {
+			if (hand == InteractionHand.MAIN_HAND) {
+				Msg.send(p, Msg.info("Dépôt du service « " + depSign.serviceName + " » : pose ton bon dans le coffre puis referme-le."));
+			}
+			return InteractionResult.SUCCESS;
+		}
 		Deposit dep = depositAt(level, pos);
 		if (dep != null) {
 			// tout le monde peut ouvrir un dépôt pour y poser son bon ; vérifié à la fermeture
@@ -350,6 +368,7 @@ public final class Shops {
 		if (s == null) s = bySign(level, pos);
 		if (s == null) {
 			Deposit dep = depositAt(level, pos);
+			if (dep == null) dep = depositBySign(level, pos);
 			if (dep == null) return true;
 			s = shopById(dep.shopId);
 			if (s == null) return true;
@@ -363,6 +382,13 @@ public final class Shops {
 		Shop s = at(level, pos);
 		if (s != null) {
 			remove(s, p, true);
+			return;
+		}
+		Deposit ds = depositBySign(level, pos);
+		if (ds != null) {
+			index.get(ds.world).remove(pos.asLong());
+			ds.signX = ds.signY = ds.signZ = null;
+			store.markDirty();
 			return;
 		}
 		Deposit dep = store.deposits.get(Shop.key(world(level), pos.getX(), pos.getY(), pos.getZ()));
@@ -382,7 +408,7 @@ public final class Shops {
 
 	/** Chaque seconde : met à jour les boutiques dont un membre vient de fermer le coffre. */
 	public void tickWatchers(MinecraftServer server) {
-		if (watching.isEmpty()) return;
+		if (watching.isEmpty() && depositWatching.isEmpty()) return;
 		Iterator<Map.Entry<UUID, String>> it = watching.entrySet().iterator();
 		while (it.hasNext()) {
 			var e = it.next();
@@ -479,6 +505,14 @@ public final class Shops {
 		d.created = System.currentTimeMillis();
 		store.deposits.put(d.posKey(), d);
 		index.computeIfAbsent(d.world, w -> new LongOpenHashSet()).add(pos.asLong());
+		BlockPos sign = placeSignBlock(level, pos);
+		if (sign != null) {
+			d.signX = sign.getX();
+			d.signY = sign.getY();
+			d.signZ = sign.getZ();
+			index.get(d.world).add(sign.asLong());
+			ShopSigns.writeDeposit(level, sign, d, ShopSigns.ownerColor(service));
+		}
 		store.markDirty();
 		return null;
 	}
@@ -487,6 +521,7 @@ public final class Shops {
 		store.deposits.remove(d.posKey());
 		LongOpenHashSet set = index.get(d.world);
 		if (set != null) set.remove(BlockPos.asLong(d.x, d.y, d.z));
+		if (set != null && d.signX != null) set.remove(BlockPos.asLong(d.signX, d.signY, d.signZ));
 		store.markDirty();
 	}
 
@@ -918,7 +953,12 @@ public final class Shops {
 	public boolean placeSign(Shop s) {
 		ServerLevel level = level(s);
 		if (level == null || !level.isLoaded(pos(s))) return false;
-		BlockPos pos = pos(s);
+		BlockPos at = placeSignBlock(level, pos(s));
+		return at != null && attachSign(s, at);
+	}
+
+	/** Pose un panneau vierge contre le coffre (face avant d'abord, sinon un côté, sinon dessus). */
+	private BlockPos placeSignBlock(ServerLevel level, BlockPos pos) {
 		BlockState chest = level.getBlockState(pos);
 		List<Direction> dirs = new ArrayList<>();
 		if (chest.hasProperty(ChestBlock.FACING)) dirs.add(chest.getValue(ChestBlock.FACING));
@@ -935,15 +975,15 @@ public final class Shops {
 				if (parts.contains(at) || !level.getBlockState(at).canBeReplaced()) continue;
 				level.setBlock(at, net.minecraft.world.level.block.Blocks.OAK_WALL_SIGN.defaultBlockState()
 						.setValue(net.minecraft.world.level.block.WallSignBlock.FACING, d), 3);
-				return attachSign(s, at);
+				return at;
 			}
 		}
 		BlockPos top = pos.above();
 		if (level.getBlockState(top).canBeReplaced()) {
 			level.setBlock(top, net.minecraft.world.level.block.Blocks.OAK_SIGN.defaultBlockState(), 3);
-			return attachSign(s, top);
+			return top;
 		}
-		return false;
+		return null;
 	}
 
 	private boolean attachSign(Shop s, BlockPos sign) {
