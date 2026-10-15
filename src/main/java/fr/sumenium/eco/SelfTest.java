@@ -285,6 +285,7 @@ final class SelfTest {
 		// vrai parcours joueur : clic sur le dépôt, bon déposé, fermeture détectée par la tâche régulière
 		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(w4), Direction.UP, w4, false));
 		SumeniumEco.shops().onChat(seller, "x"); // rien en attente côté chat
+		ds.balance += 100_000;
 		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.TORCH, 1));
 		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(ss), Direction.UP, ss, false));
 		SumeniumEco.shops().onChat(seller, "1");
