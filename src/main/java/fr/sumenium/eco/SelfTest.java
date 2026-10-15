@@ -167,7 +167,7 @@ final class SelfTest {
 		check(out, consumed, "quantité tapée dans le chat consommée (pas envoyée aux autres)");
 		check(out, db.balance == 46_000 && bread == 32, "achat de 32 : acheteur -40 Su, +32 pains (" + db.balance + ", " + bread + ")");
 		check(out, ds.balance == 85_000 + 4_000, "achat : vendeur +40 Su (" + ds.balance + ")");
-		int power = level.getBlockState(wire).getValue(net.minecraft.world.level.block.RedStoneWireBlock.POWER);
+		int power = level.getBlockState(wire).getValue(net.minecraft.world.level.block.RedstoneWireBlock.POWER);
 		check(out, power > 0 && fr.sumenium.eco.shop.Redstone.isPowered(level, chest), "signal de redstone après la vente (poudre à " + power + ")");
 		check(out, Items.count(box, new ItemStack(net.minecraft.world.item.Items.BREAD)) == 8, "stock retiré du coffre");
 		lines = signBe.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT).getMessages(false);
@@ -271,14 +271,14 @@ final class SelfTest {
 		}
 		Container depot = Shops.container(level, w4);
 		depot.setItem(0, bon);
-		var dep = SumeniumEco.shops().depositAt(level, w4);
-		boolean accepted = dep != null && SumeniumEco.shops().checkDeposit(dep, seller);
+		var depo = SumeniumEco.shops().depositAt(level, w4);
+		boolean accepted = depo != null && SumeniumEco.shops().checkDeposit(depo, seller);
 		check(out, derr == null && accepted && depot.getItem(0).isEmpty()
 				&& fr.sumenium.eco.shop.Redstone.isPowered(level, w4)
 				&& SumeniumEco.store().vouchers.get(Shops.voucherId(bon)).usedBy != null,
 				"dépôt : bon accepté, consommé, signal émis " + (derr == null ? "" : derr));
 		depot.setItem(0, bon.copy());
-		check(out, !SumeniumEco.shops().checkDeposit(dep, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
+		check(out, !SumeniumEco.shops().checkDeposit(depo, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
 
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();
