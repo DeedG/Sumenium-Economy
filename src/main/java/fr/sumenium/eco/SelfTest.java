@@ -281,6 +281,49 @@ final class SelfTest {
 		depot.setItem(0, bon.copy());
 		check(out, !SumeniumEco.shops().checkDeposit(depo, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
 
+		// Fin des signaux : on simule le passage du temps (plusieurs impulsions éteintes d'un coup)
+		try {
+			java.lang.reflect.Field f = net.minecraft.server.MinecraftServer.class.getDeclaredField("tickCount");
+			f.setAccessible(true);
+			f.setInt(server, server.getTickCount() + 1000);
+			fr.sumenium.eco.shop.Redstone.tick(server);
+			check(out, !fr.sumenium.eco.shop.Redstone.isPowered(level, chest) && !fr.sumenium.eco.shop.Redstone.isPowered(level, w4)
+					&& (!level.getBlockState(wire).is(Blocks.REDSTONE_WIRE)
+							|| level.getBlockState(wire).getValue(net.minecraft.world.level.block.RedstoneWireBlock.POWER) == 0),
+					"signaux éteints après la durée, sans erreur");
+		} catch (ReflectiveOperationException e) {
+			out.add("INFO tickCount inaccessible : " + e);
+		}
+
+		// Les vraies commandes, passées par le dispatcher (comme un joueur dans le chat)
+		BlockPos cmdBox = new BlockPos(0, 100, 6);
+		for (int x = -1; x <= 1; x++) for (int z = 3; z <= 7; z++) {
+			level.setBlock(new BlockPos(x, 99, z), Blocks.STONE.defaultBlockState(), 3);
+			level.setBlock(new BlockPos(x, 100, z), Blocks.AIR.defaultBlockState(), 3);
+			level.setBlock(new BlockPos(x, 101, z), Blocks.AIR.defaultBlockState(), 3);
+		}
+		level.setBlock(cmdBox, Blocks.BARREL.defaultBlockState(), 3);
+		seller.setPos(0.5, 100, 3.5);
+		seller.setYRot(0f);
+		seller.setXRot(30f);
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.TORCH, 1));
+		check(out, cmdBox.equals(Shops.target(seller)), "commande : le joueur regarde bien le tonneau (" + Shops.target(seller) + ")");
+		var dispatcher = server.getCommands().getDispatcher();
+		var source = seller.createCommandSourceStack();
+		for (String cmd : new String[] {"boutique creer item 10 4", "boutique info", "boutique liste", "boutique panneau", "boutique",
+				"compte", "historique", "baltop", "baltop factions", "faction", "faction liste", "bon verifier"}) {
+			try {
+				dispatcher.execute(cmd, source);
+				out.add("OK commande /" + cmd);
+			} catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+				out.add("OK commande /" + cmd + " (refus normal : " + e.getMessage() + ")");
+			} catch (RuntimeException e) {
+				out.add("ECHEC commande /" + cmd + " : " + e);
+				SumeniumEco.LOGGER.error("selftest /" + cmd, e);
+			}
+		}
+		check(out, SumeniumEco.shops().at(level, cmdBox) != null, "boutique créée par la commande");
+
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();
 		dep.t = System.currentTimeMillis();

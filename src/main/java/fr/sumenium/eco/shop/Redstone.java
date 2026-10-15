@@ -49,13 +49,17 @@ public final class Redstone {
 		for (var e : ACTIVE.entrySet()) {
 			Long2IntOpenHashMap map = e.getValue();
 			if (map.isEmpty()) continue;
-			var it = map.long2IntEntrySet().iterator();
-			while (it.hasNext()) {
-				var entry = it.next();
+			// on relève d'abord les positions à éteindre, puis on les retire (pas de lecture après suppression)
+			it.unimi.dsi.fastutil.longs.LongArrayList ended = null;
+			for (var entry : map.long2IntEntrySet()) {
 				if (entry.getIntValue() <= now) {
-					it.remove();
-					notify((ServerLevel) e.getKey(), BlockPos.of(entry.getLongKey()));
+					if (ended == null) ended = new it.unimi.dsi.fastutil.longs.LongArrayList();
+					ended.add(entry.getLongKey());
 				}
+			}
+			if (ended != null) {
+				for (int i = 0; i < ended.size(); i++) map.remove(ended.getLong(i));
+				for (int i = 0; i < ended.size(); i++) notify((ServerLevel) e.getKey(), BlockPos.of(ended.getLong(i)));
 			}
 			if (!map.isEmpty()) left = true;
 		}

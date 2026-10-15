@@ -88,9 +88,11 @@ public final class ShopCommands {
 		int qty = kind == Shop.Kind.ITEM ? IntegerArgumentType.getInteger(ctx, "quantite") : 1;
 		String name = kind == Shop.Kind.SERVICE ? StringArgumentType.getString(ctx, "nom").trim() : null;
 		if (name != null && (name.isEmpty() || name.length() > 48)) return Cmd.err(ctx, "Nom du bon : 1 à 48 caractères.");
-		String error = SumeniumEco.shops().create(p, kind, price, qty, name, false);
+		// position relevée avant la création : le panneau posé ensuite peut se retrouver dans le regard du joueur
+		BlockPos pos = Shops.target(p);
+		String error = SumeniumEco.shops().create(p, pos, kind, price, qty, name, false);
 		if (error != null) return Cmd.err(ctx, error);
-		Shop s = SumeniumEco.shops().find(p.level(), Shops.target(p));
+		Shop s = SumeniumEco.shops().find(p.level(), pos);
 		Cmd.ok(ctx, SumeniumEco.shops().describe(s, true));
 		return Cmd.ok(ctx, "Boutique créée (" + Money.format(s.feePaid) + " de frais, payés par "
 				+ (s.ownerType == Shop.OwnerType.FACTION ? "la banque de faction" : "ton compte") + ").");
@@ -99,9 +101,10 @@ public final class ShopCommands {
 	private static int adminCreate(CommandContext<CommandSourceStack> ctx, Shop.Kind kind, double price, int qty)
 			throws CommandSyntaxException {
 		ServerPlayer p = Cmd.player(ctx);
-		String error = SumeniumEco.shops().create(p, kind, Money.toCents(price), qty, null, true);
+		BlockPos pos = Shops.target(p);
+		String error = SumeniumEco.shops().create(p, pos, kind, Money.toCents(price), qty, null, true);
 		if (error != null) return Cmd.err(ctx, error);
-		Shop s = SumeniumEco.shops().find(p.level(), Shops.target(p));
+		Shop s = SumeniumEco.shops().find(p.level(), pos);
 		return Cmd.ok(ctx, SumeniumEco.shops().describe(s, false));
 	}
 
