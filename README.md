@@ -30,6 +30,8 @@ Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent
 | `/boutique creer item <prix> <quantité>` | Regarder un coffre ou un tonneau, l'item à vendre en main. Le prix est pour la quantité (ex. `20 16` = 16 items pour 20 Su) |
 | `/boutique creer service <prix> <nom du bon>` | Service à stock infini : l'acheteur reçoit un bon nommé |
 | `/boutique info` · `liste` · `supprimer` · `prix <prix> [quantité]` | Gérer ses boutiques (supprimer rembourse 50 % des frais) |
+| `/boutique panneau` | Réécrit le panneau, en reprend un accroché au coffre ou en pose un neuf |
+| `/boutique faction` · `/boutique perso` | Donner sa boutique à sa faction (tous les membres ravitaillent) ou la reprendre |
 | `/bon verifier` · `/bon valider` | Vérifier un bon en main / le valider (vendeur du service) |
 | `/faction` · `info <faction>` · `liste` | Voir les factions |
 | `/faction inviter` · `rejoindre` · `quitter` · `exclure` · `role` | Gestion par le chef |
