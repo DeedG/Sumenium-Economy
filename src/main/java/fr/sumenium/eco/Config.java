@@ -44,6 +44,20 @@ public final class Config {
 	/** Temps pour que le prix revienne entièrement à la normale (minutes). */
 	public int prixDynamiquesRetourMinutes = 120;
 
+	// --- Hôtel des ventes ---
+	/** Annonces actives maximum par joueur. */
+	public int hdvAnnoncesMax = 3;
+	/** Durée d'une annonce (jours). */
+	public int hdvDureeJours = 7;
+	/** Taxe du FISC sur chaque vente à l'hôtel des ventes (0.15 = 15 %). */
+	public double hdvTaxe = 0.15;
+	/** Surenchère minimum en part de l'offre actuelle (0.05 = 5 %, au moins 1 Su). */
+	public double hdvSurenchereMin = 0.05;
+	/** Distance max du PNJ pour mettre un item en vente (blocs). */
+	public int hdvDistance = 10;
+	/** Une offre dans les dernières minutes prolonge l'enchère de ce nombre de minutes (anti dernière seconde). */
+	public int hdvProlongationMinutes = 5;
+
 	// --- Factions ---
 	public int factionMembresMax = 8;
 	/** Les joueurs peuvent créer une faction eux-mêmes (sinon admins seulement). */

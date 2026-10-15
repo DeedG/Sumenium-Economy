@@ -32,6 +32,7 @@ public final class DataStore {
 	/** clé de position -> dépôt de service */
 	public final Map<String, Deposit> deposits = new LinkedHashMap<>();
 	public Meta meta = new Meta();
+	public HdvData hdv = new HdvData();
 
 	private final Path dir;
 	private boolean dirty;
@@ -69,6 +70,8 @@ public final class DataStore {
 		if (v != null) for (Voucher d : v) vouchers.put(d.id, d);
 		List<Deposit> dp = read("depots.json", new TypeToken<List<Deposit>>() {}.getType());
 		if (dp != null) for (Deposit d : dp) deposits.put(d.posKey(), d);
+		HdvData h = read("hdv.json", HdvData.class);
+		hdv = h != null ? h : new HdvData();
 		Meta m = read("meta.json", Meta.class);
 		if (m != null) meta = m;
 		dirty = false;
@@ -82,6 +85,7 @@ public final class DataStore {
 		write("boutiques.json", new ArrayList<>(shops.values()));
 		write("bons.json", new ArrayList<>(vouchers.values()));
 		write("depots.json", new ArrayList<>(deposits.values()));
+		write("hdv.json", hdv);
 		write("meta.json", meta);
 		dirty = false;
 	}

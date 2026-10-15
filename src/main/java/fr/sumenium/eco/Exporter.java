@@ -61,6 +61,8 @@ public final class Exporter {
 			write("comptes.json", accounts(store));
 			write("prix-fisc.json", fiscPrices(store));
 			write("stats.json", stats(store));
+			write("hdv.json", hdv());
+			write("bluemap-markers.json", bluemap(store));
 			if (lastExport - lastSupplyPoint >= 3_600_000L) {
 				lastSupplyPoint = lastExport;
 				JsonObject point = new JsonObject();
@@ -117,6 +119,91 @@ public final class Exporter {
 		}
 		root.add("boutiques", arr);
 		return root;
+	}
+
+	private JsonObject hdv() {
+		JsonObject root = envelope();
+		JsonArray arr = new JsonArray();
+		for (fr.sumenium.eco.data.Listing l : SumeniumEco.hdv().listings()) {
+			JsonObject o = new JsonObject();
+			o.addProperty("id", l.id);
+			o.addProperty("vendeur", l.sellerName);
+			o.addProperty("item", l.itemId);
+			o.addProperty("nom", l.itemName);
+			o.addProperty("quantite", l.count);
+			o.addProperty("prixDepart", Money.toUnits(l.startPrice));
+			o.addProperty("achatImmediat", l.buyNow == null ? null : Money.toUnits(l.buyNow));
+			o.addProperty("offreActuelle", l.bid > 0 ? Money.toUnits(l.bid) : null);
+			o.addProperty("meilleurEncherisseur", l.bidderName);
+			o.addProperty("nbOffres", l.bids);
+			o.addProperty("fin", Instant.ofEpochMilli(l.expires).toString());
+			arr.add(o);
+		}
+		root.add("annonces", arr);
+		return root;
+	}
+
+	/**
+	 * Marqueurs au format BlueMap (un "marker set" par catégorie), à copier dans
+	 * maps/<monde>/live/markers.json ou à fusionner par le site.
+	 */
+	private JsonObject bluemap(DataStore store) {
+		JsonObject root = new JsonObject();
+		JsonObject shopsSet = markerSet("Boutiques", 0);
+		JsonObject fiscSet = markerSet("FISC", 1);
+		var shops = SumeniumEco.shops();
+		for (Shop s : store.shops.values()) {
+			if (!"minecraft:overworld".equals(s.world)) continue;
+			JsonObject m = new JsonObject();
+			m.addProperty("type", "poi");
+			String what = s.kind == Shop.Kind.SERVICE ? s.serviceName : s.itemName;
+			m.addProperty("label", shops.ownerName(s) + " : " + what);
+			JsonObject pos = new JsonObject();
+			pos.addProperty("x", s.x + 0.5);
+			pos.addProperty("y", s.y + 0.5);
+			pos.addProperty("z", s.z + 0.5);
+			m.add("position", pos);
+			String price = (s.quantity > 1 ? s.quantity + " pour " : "") + Money.format(s.price);
+			boolean empty = s.kind == Shop.Kind.ITEM && s.lastStock >= 0 && s.lastStock < s.quantity;
+			m.addProperty("detail", "<b>" + esc(shops.ownerName(s)) + "</b><br>" + esc(what) + "<br>"
+					+ esc(s.kind == Shop.Kind.FISC_RACHAT ? "Rachat " + Money.format(s.price) : price)
+					+ (empty ? "<br><i>Rupture de stock</i>" : ""));
+			m.addProperty("max-distance", 1000);
+			(s.isFisc() ? fiscSet : shopsSet).getAsJsonObject("markers").add("sumeco-" + s.id, m);
+		}
+		JsonObject hdvSet = markerSet("Hôtel des ventes", 2);
+		int i = 0;
+		for (fr.sumenium.eco.data.HdvData.Place pl : store.hdv.npcs) {
+			if (!"minecraft:overworld".equals(pl.world)) continue;
+			JsonObject m = new JsonObject();
+			m.addProperty("type", "poi");
+			m.addProperty("label", "Hôtel des ventes");
+			JsonObject pos = new JsonObject();
+			pos.addProperty("x", pl.x + 0.5);
+			pos.addProperty("y", pl.y + 1.0);
+			pos.addProperty("z", pl.z + 0.5);
+			m.add("position", pos);
+			m.addProperty("detail", "<b>Hôtel des ventes</b><br>" + SumeniumEco.hdv().listings().size() + " annonce(s)");
+			hdvSet.getAsJsonObject("markers").add("sumeco-hdv-" + (i++), m);
+		}
+		root.add("sumenium-boutiques", shopsSet);
+		root.add("sumenium-fisc", fiscSet);
+		root.add("sumenium-hdv", hdvSet);
+		return root;
+	}
+
+	private static JsonObject markerSet(String label, int sorting) {
+		JsonObject set = new JsonObject();
+		set.addProperty("label", label);
+		set.addProperty("toggleable", true);
+		set.addProperty("default-hidden", false);
+		set.addProperty("sorting", sorting);
+		set.add("markers", new JsonObject());
+		return set;
+	}
+
+	private static String esc(String s) {
+		return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 	private JsonObject factions(DataStore store) {
@@ -212,6 +299,7 @@ public final class Exporter {
 				case Tx.RACHAT_FISC -> "rachatsFisc";
 				case Tx.ACHAT_FISC -> "achatsFisc";
 				case Tx.FRAIS_BOUTIQUE -> "fraisBoutiques";
+				case Tx.HDV_VENTE -> "ventesHdv";
 				default -> null;
 			};
 			if (key == null) continue;

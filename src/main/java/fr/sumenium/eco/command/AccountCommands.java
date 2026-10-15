@@ -170,7 +170,7 @@ public final class AccountCommands {
 	/** Variation d'un compte dans une transaction (le vendeur reçoit le montant moins la taxe). */
 	private static long delta(Tx tx, String account) {
 		if (account == null) return 0;
-		boolean sale = Tx.ACHAT.equals(tx.type) || Tx.ACHAT_SERVICE.equals(tx.type);
+		boolean sale = Tx.ACHAT.equals(tx.type) || Tx.ACHAT_SERVICE.equals(tx.type) || Tx.HDV_VENTE.equals(tx.type);
 		long d = 0;
 		if (account.equals(tx.from)) d -= tx.amount;
 		if (account.equals(tx.to)) d += tx.amount - (sale ? tx.tax : 0);
@@ -228,6 +228,9 @@ public final class AccountCommands {
 			case Tx.ADMIN -> "Admin";
 			case Tx.IMPORT -> "Reprise Savs";
 			case Tx.BON_UTILISE -> "Bon validé";
+			case Tx.HDV_OFFRE -> "Offre HDV";
+			case Tx.HDV_REMBOURSEMENT -> "Offre HDV rendue";
+			case Tx.HDV_VENTE -> "Vente HDV";
 			default -> tx.type;
 		};
 	}

@@ -1033,6 +1033,7 @@ public final class Shops {
 		s.signCache = null;
 		store.markDirty();
 		updateSign(s);
+		Directory.markDirty();
 		SumeniumEco.exporter().requestExport();
 		return null;
 	}
@@ -1124,6 +1125,7 @@ public final class Shops {
 			if (!s.hasSign()) linkSign(s);
 			refreshStock(s);
 		}
+		Directory.markDirty();
 	}
 
 	/** Récap à la connexion : seulement les boutiques du joueur et de sa faction. */
@@ -1252,6 +1254,7 @@ public final class Shops {
 		store.markDirty();
 		linkSign(s);
 		if (!s.hasSign()) placeSign(s);
+		Directory.markDirty();
 		refreshStock(s);
 		SumeniumEco.exporter().requestExport();
 		return null;
@@ -1259,6 +1262,7 @@ public final class Shops {
 
 	/** Supprime une boutique, avec remboursement partiel des frais. */
 	public void remove(Shop s, ServerPlayer actor, boolean refund) {
+		Directory.markDirty();
 		store.shops.remove(s.posKey());
 		unindex(s);
 		for (Deposit d : new ArrayList<>(store.deposits.values())) if (d.shopId.equals(s.id)) removeDeposit(d);

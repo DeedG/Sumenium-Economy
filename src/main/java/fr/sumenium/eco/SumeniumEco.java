@@ -46,6 +46,7 @@ public final class SumeniumEco implements ModInitializer {
 	private static Factions factions;
 	private static Shops shops;
 	private static Exporter exporter;
+	private static fr.sumenium.eco.hdv.AuctionHouse hdv;
 	private static boolean ready;
 
 	@Override
@@ -60,12 +61,14 @@ public final class SumeniumEco implements ModInitializer {
 		factions = new Factions(store);
 		shops = new Shops(store);
 		exporter = new Exporter(data.resolve("export"));
+		hdv = new fr.sumenium.eco.hdv.AuctionHouse(store);
 
 		CommandRegistrationCallback.EVENT.register((dispatcher, registry, selection) -> {
 			AccountCommands.register(dispatcher);
 			ShopCommands.register(dispatcher);
 			FactionCommands.register(dispatcher);
 			AdminCommands.register(dispatcher);
+			fr.sumenium.eco.command.HdvCommands.register(dispatcher);
 		});
 
 		ServerLifecycleEvents.SERVER_STARTED.register(s -> {
@@ -96,7 +99,11 @@ public final class SumeniumEco implements ModInitializer {
 			}
 			if (tick % 1200 == 0 && store.isDirty()) store.save();
 			if (tick % 6000 == 0) shops.refreshAll();
-			if (tick % 100 == 0) exporter.tick();
+			if (tick % 100 == 0) {
+				exporter.tick();
+				fr.sumenium.eco.shop.Directory.tick();
+			}
+			if (tick % 400 == 0) hdv.tick();
 		});
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
@@ -105,6 +112,7 @@ public final class SumeniumEco implements ModInitializer {
 			PlayerData d = accounts.player(p);
 			factions.syncOnJoin(p, d);
 			shops.loginRecap(p);
+			hdv.loginRecap(p);
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, s) -> {
 			if (!ready) return;
@@ -116,15 +124,32 @@ public final class SumeniumEco implements ModInitializer {
 
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!ready || level.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
+			if (hdv.isMailboxBlock(level, hit.getBlockPos())) {
+				if (hand == net.minecraft.world.InteractionHand.MAIN_HAND && !(shops.hasBypass(sp) && sp.isShiftKeyDown())) {
+					hdv.openMailbox(sp);
+					return InteractionResult.SUCCESS;
+				}
+				return hand == net.minecraft.world.InteractionHand.MAIN_HAND ? InteractionResult.PASS : InteractionResult.FAIL;
+			}
 			return shops.onUse(sp, level, hand, hit);
 		});
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
 			if (!ready) return true;
-			return !shops.onChat(sender, message.signedContent());
+			if (shops.onChat(sender, message.signedContent())) return false;
+			return !hdv.onChat(sender, message.signedContent());
 		});
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> {
 			if (!ready || !(player instanceof ServerPlayer sp)) return true;
-			if (shops.beforeBreak(sp, level, pos)) return true;
+			boolean special = hdv.isMailboxBlock(level, pos) || fr.sumenium.eco.shop.Directory.isLectern(level, pos);
+			if (special && !shops.hasBypass(sp)) {
+				fr.sumenium.eco.util.Msg.send(sp, fr.sumenium.eco.util.Msg.err("Bloc de l'hôtel des ventes : /sumeco bypass pour le casser."));
+			} else if (shops.beforeBreak(sp, level, pos)) {
+				if (special) {
+					hdv.removeMailboxBlock(level, pos);
+					fr.sumenium.eco.shop.Directory.remove(level, pos);
+				}
+				return true;
+			}
 			// casse refusée : on renvoie le bloc et son contenu (texte du panneau) au joueur
 			sp.level().getServer().execute(() -> {
 				var current = level.getBlockState(pos);
@@ -137,6 +162,17 @@ public final class SumeniumEco implements ModInitializer {
 		PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, be) -> {
 			if (!ready || !(player instanceof ServerPlayer sp)) return;
 			shops.afterBreak(sp, level, pos);
+		});
+
+		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+			if (!ready || level.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
+			if (!fr.sumenium.eco.hdv.AuctionHouse.isNpc(entity)) return InteractionResult.PASS;
+			if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) hdv.openMenu(sp, 0, false);
+			return InteractionResult.SUCCESS;
+		});
+		net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+			if (!ready || !fr.sumenium.eco.hdv.AuctionHouse.isNpc(entity)) return InteractionResult.PASS;
+			return InteractionResult.FAIL;
 		});
 
 		LOGGER.info("Suménium Economy chargé");
@@ -185,6 +221,10 @@ public final class SumeniumEco implements ModInitializer {
 
 	public static Shops shops() {
 		return shops;
+	}
+
+	public static fr.sumenium.eco.hdv.AuctionHouse hdv() {
+		return hdv;
 	}
 
 	public static Exporter exporter() {

@@ -15,6 +15,9 @@ public final class Tx {
 	public static final String ADMIN = "ADMIN";
 	public static final String IMPORT = "IMPORT";
 	public static final String BON_UTILISE = "BON_UTILISE";
+	public static final String HDV_OFFRE = "HDV_OFFRE";
+	public static final String HDV_REMBOURSEMENT = "HDV_REMBOURSEMENT";
+	public static final String HDV_VENTE = "HDV_VENTE";
 
 	/** Horodatage (ms epoch). */
 	public long t;

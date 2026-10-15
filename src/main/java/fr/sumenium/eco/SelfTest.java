@@ -340,7 +340,7 @@ final class SelfTest {
 			@Override public boolean shouldInformAdmins() { return false; }
 		});
 		for (String cmd : new String[] {"boutique creer item 10 4", "boutique info", "boutique liste", "boutique panneau", "boutique",
-				"compte", "historique", "baltop", "baltop factions", "faction", "faction liste", "bon verifier"}) {
+				"compte", "historique", "baltop", "baltop factions", "faction", "faction liste", "bon verifier", "hdv", "hdv annonces"}) {
 			try {
 				dispatcher.execute(cmd, source);
 				out.add("OK commande /" + cmd);
@@ -353,6 +353,86 @@ final class SelfTest {
 		}
 		check(out, SumeniumEco.shops().at(level, cmdBox) != null, "boutique créée par la commande : "
 				+ (feedback.isEmpty() ? "" : feedback.get(0)));
+
+		// Hôtel des ventes : PNJ, annonce, surenchères, achat immédiat, fin sans offre, fin avec offre
+		var hdv = SumeniumEco.hdv();
+		FakePlayer third = FakePlayer.get(level, new GameProfile(UUID.fromString("00000000-0000-0000-0000-00000000000c"), "Tiers"));
+		third.setPos(1.5, 100, 4.5);
+		PlayerData dt = SumeniumEco.accounts().player(third);
+		dt.balance = 100_000;
+		db.balance = 100_000;
+		ds.balance = 100_000;
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.DIAMOND, 5));
+		check(out, hdv.sell(seller, 1_000, null) != null, "hdv : vente refusée loin du PNJ");
+		hdv.spawnNpc(seller);
+		check(out, hdv.nearNpc(seller), "hdv : PNJ placé");
+		String herr = hdv.sell(seller, 1_000, 5_000L);
+		var listing = hdv.activeOf(ds.uuid).isEmpty() ? null : hdv.activeOf(ds.uuid).get(0);
+		check(out, herr == null && listing != null && seller.getMainHandItem().isEmpty(), "hdv : annonce créée, stack retiré " + (herr == null ? "" : herr));
+		hdv.startChat(buyer, listing.id);
+		hdv.onChat(buyer, "12");
+		check(out, listing.bid == 1_200 && db.balance == 100_000 - 1_200, "hdv : offre de 12 bloquée");
+		hdv.startChat(third, listing.id);
+		hdv.onChat(third, "12.5");
+		check(out, listing.bid == 1_200, "hdv : surenchère trop faible refusée");
+		hdv.startChat(third, listing.id);
+		hdv.onChat(third, "20");
+		check(out, listing.bid == 2_000 && db.balance == 100_000 && dt.balance == 100_000 - 2_000, "hdv : surenchère, ancien enchérisseur remboursé");
+		hdv.startChat(third, listing.id);
+		hdv.onChat(third, "achat");
+		int diamonds = 0;
+		for (int i = 0; i < third.getInventory().getContainerSize(); i++) {
+			ItemStack st = third.getInventory().getItem(i);
+			if (st.is(net.minecraft.world.item.Items.DIAMOND)) diamonds += st.getCount();
+		}
+		check(out, hdv.get(listing.id) == null && diamonds == 5 && dt.balance == 100_000 - 5_000 && ds.balance == 100_000 + 4_250,
+				"hdv : achat immédiat 50, vendeur +42,5 après 15 % (" + ds.balance + "), acheteur " + diamonds + " diamants");
+		// fin sans offre -> boîte aux lettres du vendeur
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.EMERALD, 3));
+		hdv.sell(seller, 500, null);
+		var l2 = hdv.activeOf(ds.uuid).get(0);
+		l2.expires = System.currentTimeMillis() - 1;
+		hdv.tick();
+		check(out, hdv.get(l2.id) == null && hdv.mailboxCount(ds.uuid) == 1, "hdv : fin sans offre, item dans la boîte aux lettres");
+		// fin avec offre -> item au gagnant (boîte aux lettres, il n'est pas connecté), argent au vendeur
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.GOLD_INGOT, 10));
+		hdv.sell(seller, 1_000, null);
+		var l3 = hdv.activeOf(ds.uuid).get(0);
+		hdv.startChat(buyer, l3.id);
+		hdv.onChat(buyer, "15");
+		long sb3 = ds.balance;
+		l3.expires = System.currentTimeMillis() - 1;
+		hdv.tick();
+		check(out, hdv.get(l3.id) == null && hdv.mailboxCount(db.uuid) == 1 && ds.balance - sb3 == 1_275,
+				"hdv : fin avec offre, vendeur +12,75, item au gagnant");
+		// limite de 3 annonces
+		for (int i = 0; i < 4; i++) {
+			seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.COAL, 1));
+			hdv.sell(seller, 100, null);
+		}
+		check(out, hdv.activeOf(ds.uuid).size() == 3, "hdv : 3 annonces maximum");
+		try {
+			hdv.openMenu(buyer, 0, false);
+			hdv.openMailbox(seller);
+			out.add("OK hdv : menus ouverts sans erreur");
+		} catch (RuntimeException e) {
+			out.add("ECHEC hdv : menu " + e);
+		}
+
+		// Annuaire sur un lutrin
+		BlockPos lectern = new BlockPos(-1, 100, 6);
+		level.setBlock(lectern, Blocks.LECTERN.defaultBlockState(), 3);
+		fr.sumenium.eco.shop.Directory.add(level, lectern);
+		var lbe = (net.minecraft.world.level.block.entity.LecternBlockEntity) level.getBlockEntity(lectern);
+		var content = lbe.getBook().get(DataComponents.WRITTEN_BOOK_CONTENT);
+		check(out, lbe.hasBook() && content != null && content.pages().size() >= 2, "annuaire : livre posé ("
+				+ (content == null ? 0 : content.pages().size()) + " pages)");
+		lbe.setBook(ItemStack.EMPTY);
+		fr.sumenium.eco.shop.Directory.tick();
+		check(out, lbe.hasBook(), "annuaire : livre remis s'il est pris");
+		SumeniumEco.exporter().exportAll();
+		check(out, Files.exists(SumeniumEco.gameDir().resolve("sumenium-data/export/hdv.json"))
+				&& Files.exists(SumeniumEco.gameDir().resolve("sumenium-data/export/bluemap-markers.json")), "export hdv et BlueMap");
 
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();

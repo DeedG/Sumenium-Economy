@@ -223,6 +223,8 @@ public final class ShopCommands {
 		if (s.isFisc() && !Shops.isAdmin(p)) return Cmd.err(ctx, "Réservé aux admins.");
 		s.price = Money.toCents(DoubleArgumentType.getDouble(ctx, "prix"));
 		if (qty > 0 && s.kind == Shop.Kind.ITEM) s.quantity = qty;
+		fr.sumenium.eco.shop.Directory.markDirty();
+		SumeniumEco.shops().updateSign(s);
 		SumeniumEco.store().markDirty();
 		SumeniumEco.exporter().requestExport();
 		return Cmd.ok(ctx, SumeniumEco.shops().describe(s, false));
