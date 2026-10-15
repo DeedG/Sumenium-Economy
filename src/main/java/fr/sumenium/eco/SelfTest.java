@@ -48,7 +48,8 @@ final class SelfTest {
 		String[] classes = {
 				"net.minecraft.server.players.SleepStatus",
 				"net.minecraft.server.level.ServerPlayer",
-				"net.minecraft.world.level.block.entity.HopperBlockEntity",
+				"net.minecraft.world.level.block.entity.ChestBlockEntity",
+				"net.minecraft.world.CompoundContainer",
 				"net.minecraft.world.level.ServerExplosion",
 				"net.minecraft.world.entity.ai.behavior.TransportItemsBetweenContainers$TransportItemTarget",
 		};

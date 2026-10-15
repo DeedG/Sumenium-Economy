@@ -5,7 +5,6 @@
 	"mixins": [
 		"SleepStatusMixin",
 		"ServerPlayerMixin",
-		"HopperBlockEntityMixin",
 		"ServerExplosionMixin",
 		"TransportItemTargetMixin",
 		"BaseContainerBlockEntityMixin",
