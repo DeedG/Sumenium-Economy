@@ -151,6 +151,8 @@ final class SelfTest {
 				"panneau écrit et ciré : " + lines.get(0).getString() + " / " + lines.get(1).getString() + " / "
 						+ lines.get(2).getString() + " / " + lines.get(3).getString());
 
+		BlockPos wire = chest.west();
+		level.setBlock(wire, Blocks.REDSTONE_WIRE.defaultBlockState(), 3);
 		BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(chest), Direction.UP, chest, false);
 		InteractionResult r1 = SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, hit);
 		check(out, r1 == InteractionResult.SUCCESS && db.balance == 50_000, "clic = info, coffre non ouvert, pas d'achat");
@@ -165,6 +167,8 @@ final class SelfTest {
 		check(out, consumed, "quantité tapée dans le chat consommée (pas envoyée aux autres)");
 		check(out, db.balance == 46_000 && bread == 32, "achat de 32 : acheteur -40 Su, +32 pains (" + db.balance + ", " + bread + ")");
 		check(out, ds.balance == 85_000 + 4_000, "achat : vendeur +40 Su (" + ds.balance + ")");
+		int power = level.getBlockState(wire).getValue(net.minecraft.world.level.block.RedStoneWireBlock.POWER);
+		check(out, power > 0 && fr.sumenium.eco.shop.Redstone.isPowered(level, chest), "signal de redstone après la vente (poudre à " + power + ")");
 		check(out, Items.count(box, new ItemStack(net.minecraft.world.item.Items.BREAD)) == 8, "stock retiré du coffre");
 		lines = signBe.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT).getMessages(false);
 		check(out, lines.get(3).getString().equals("Rupture"), "panneau mis à jour : " + lines.get(3).getString());
@@ -253,6 +257,28 @@ final class SelfTest {
 		}
 		check(out, voucher && ds.balance == sellerBefore - 30_000 && team.bank == bankBefore + 30_000,
 				"bon de service acheté par un membre (perso -> banque faction)");
+
+		// Dépôt de service : le bon valide est consommé et le dépôt émet un signal
+		BlockPos w4 = base.offset(4, 0, 2);
+		level.setBlock(w4, Blocks.BARREL.defaultBlockState(), 3);
+		String derr = SumeniumEco.shops().createDeposit(seller, w4, "usine xp 30 min");
+		ItemStack bon = ItemStack.EMPTY;
+		for (int i = 0; i < seller.getInventory().getContainerSize(); i++) {
+			if (Shops.voucherId(seller.getInventory().getItem(i)) != null) {
+				bon = seller.getInventory().getItem(i).copy();
+				seller.getInventory().setItem(i, ItemStack.EMPTY);
+			}
+		}
+		Container depot = Shops.container(level, w4);
+		depot.setItem(0, bon);
+		var dep = SumeniumEco.shops().depositAt(level, w4);
+		boolean accepted = dep != null && SumeniumEco.shops().checkDeposit(dep, seller);
+		check(out, derr == null && accepted && depot.getItem(0).isEmpty()
+				&& fr.sumenium.eco.shop.Redstone.isPowered(level, w4)
+				&& SumeniumEco.store().vouchers.get(Shops.voucherId(bon)).usedBy != null,
+				"dépôt : bon accepté, consommé, signal émis " + (derr == null ? "" : derr));
+		depot.setItem(0, bon.copy());
+		check(out, !SumeniumEco.shops().checkDeposit(dep, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
 
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();

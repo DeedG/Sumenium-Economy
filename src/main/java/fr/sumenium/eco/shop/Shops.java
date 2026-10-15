@@ -4,6 +4,7 @@ import fr.sumenium.eco.Accounts.Account;
 import fr.sumenium.eco.Config;
 import fr.sumenium.eco.SumeniumEco;
 import fr.sumenium.eco.data.DataStore;
+import fr.sumenium.eco.data.Deposit;
 import fr.sumenium.eco.data.Faction;
 import fr.sumenium.eco.data.PlayerData;
 import fr.sumenium.eco.data.Shop;
@@ -77,6 +78,8 @@ public final class Shops {
 	private final Map<UUID, Pending> pending = new HashMap<>();
 	/** Membres qui ont ouvert le coffre d'une boutique : on met le stock à jour à la fermeture. */
 	private final Map<UUID, String> watching = new HashMap<>();
+	/** Joueurs qui ont ouvert un dépôt de service : on cherche un bon valide à la fermeture. */
+	private final Map<UUID, String> depositWatching = new HashMap<>();
 	/** Admins en mode gestion (/sumeco bypass) : ils ouvrent et cassent toutes les boutiques. */
 	private final Set<UUID> bypass = new HashSet<>();
 	public final DynamicPrices dynamic = new DynamicPrices();
@@ -93,6 +96,9 @@ public final class Shops {
 		index.clear();
 		signs.clear();
 		for (Shop s : store.shops.values()) index(s);
+		for (Deposit d : store.deposits.values()) {
+			index.computeIfAbsent(d.world, w -> new LongOpenHashSet()).add(BlockPos.asLong(d.x, d.y, d.z));
+		}
 	}
 
 	private void index(Shop s) {
@@ -140,6 +146,23 @@ public final class Shops {
 		if (s != null) return s;
 		BlockPos other = connectedHalf(level, pos);
 		return other == null ? null : at(level, other);
+	}
+
+	/** Dépôt de service sur ce bloc ou sur l'autre moitié d'un double coffre. */
+	public Deposit depositAt(Level level, BlockPos pos) {
+		String w = world(level);
+		if (indexed(level, pos)) {
+			Deposit d = store.deposits.get(Shop.key(w, pos.getX(), pos.getY(), pos.getZ()));
+			if (d != null) return d;
+		}
+		BlockPos other = connectedHalf(level, pos);
+		if (other != null && indexed(level, other)) return store.deposits.get(Shop.key(w, other.getX(), other.getY(), other.getZ()));
+		return null;
+	}
+
+	public Shop shopById(String id) {
+		for (Shop s : store.shops.values()) if (s.id.equals(id)) return s;
+		return null;
 	}
 
 	/** Boutique dont ce bloc est le panneau. */
@@ -299,6 +322,12 @@ public final class Shops {
 			}
 			return InteractionResult.SUCCESS;
 		}
+		Deposit dep = depositAt(level, pos);
+		if (dep != null) {
+			// tout le monde peut ouvrir un dépôt pour y poser son bon ; vérifié à la fermeture
+			if (hand == InteractionHand.MAIN_HAND) depositWatching.put(p.getUUID(), dep.posKey());
+			return InteractionResult.PASS;
+		}
 		// Empêche de coller un coffre à une boutique dont on n'est pas membre (double coffre).
 		ItemStack held = p.getItemInHand(hand);
 		if (held.getItem() instanceof BlockItem bi && bi.getBlock() instanceof ChestBlock) {
@@ -319,7 +348,12 @@ public final class Shops {
 	public boolean beforeBreak(ServerPlayer p, Level level, BlockPos pos) {
 		Shop s = find(level, pos);
 		if (s == null) s = bySign(level, pos);
-		if (s == null) return true;
+		if (s == null) {
+			Deposit dep = depositAt(level, pos);
+			if (dep == null) return true;
+			s = shopById(dep.shopId);
+			if (s == null) return true;
+		}
 		if (canManage(p, s)) return true;
 		Msg.send(p, Msg.err("Cette boutique appartient à " + ownerName(s) + "."));
 		return false;
@@ -329,6 +363,12 @@ public final class Shops {
 		Shop s = at(level, pos);
 		if (s != null) {
 			remove(s, p, true);
+			return;
+		}
+		Deposit dep = store.deposits.get(Shop.key(world(level), pos.getX(), pos.getY(), pos.getZ()));
+		if (dep != null) {
+			removeDeposit(dep);
+			Msg.send(p, Msg.info("Dépôt du service « " + dep.serviceName + " » supprimé."));
 			return;
 		}
 		Shop bySign = bySign(level, pos);
@@ -352,6 +392,119 @@ public final class Shops {
 			Shop s = store.shops.get(e.getValue());
 			if (s != null) refreshStock(s);
 		}
+		var dit = depositWatching.entrySet().iterator();
+		while (dit.hasNext()) {
+			var e = dit.next();
+			ServerPlayer p = server.getPlayerList().getPlayer(e.getKey());
+			if (p != null && p.containerMenu != p.inventoryMenu) continue;
+			dit.remove();
+			Deposit d = store.deposits.get(e.getValue());
+			if (d != null) checkDeposit(d, p);
+		}
+	}
+
+	// ------------------------------------------------------------------ dépôts de service
+
+	/**
+	 * Cherche un bon valide pour ce service dans le dépôt : il est consommé (un par fermeture)
+	 * et le coffre émet un signal de redstone.
+	 * @return true si un bon a été accepté
+	 */
+	public boolean checkDeposit(Deposit d, ServerPlayer p) {
+		ServerLevel level = null;
+		for (ServerLevel l : SumeniumEco.server().getAllLevels()) if (world(l).equals(d.world)) level = l;
+		if (level == null) return false;
+		BlockPos pos = new BlockPos(d.x, d.y, d.z);
+		Container box = container(level, pos);
+		if (box == null) return false;
+		String refused = null;
+		for (int i = 0; i < box.getContainerSize(); i++) {
+			ItemStack st = box.getItem(i);
+			String id = voucherId(st);
+			if (id == null) continue;
+			Voucher v = store.vouchers.get(id);
+			if (v == null || !d.shopId.equals(v.shopId)) {
+				refused = "ce bon n'est pas pour le service « " + d.serviceName + " »";
+				continue;
+			}
+			if (v.usedBy != null) {
+				refused = "ce bon a déjà été utilisé";
+				continue;
+			}
+			box.removeItem(i, 1);
+			box.setChanged();
+			v.usedBy = "dépôt" + (p != null ? " (" + p.getPlainTextName() + ")" : "");
+			v.usedAt = System.currentTimeMillis();
+			d.used++;
+			store.markDirty();
+			Tx tx = new Tx();
+			tx.type = Tx.BON_UTILISE;
+			if (p != null) {
+				tx.actor = p.getUUID().toString();
+				tx.actorName = p.getPlainTextName();
+			}
+			tx.shop = d.shopId;
+			tx.itemName = d.serviceName;
+			tx.note = "bon " + v.id + " de " + v.buyerName + " (dépôt)";
+			tx.world = d.world;
+			tx.x = d.x;
+			tx.y = d.y;
+			tx.z = d.z;
+			SumeniumEco.txlog().add(tx);
+			Redstone.pulse(level, pos, SumeniumEco.config().signalDepotTicks);
+			if (p != null) Msg.send(p, Msg.ok("Bon « " + d.serviceName + " » accepté, le service démarre."));
+			return true;
+		}
+		if (refused != null && p != null) Msg.send(p, Msg.err("Bon refusé : " + refused + "."));
+		return false;
+	}
+
+	/** Crée un dépôt pour un service du joueur sur le coffre visé. */
+	public String createDeposit(ServerPlayer p, BlockPos pos, String serviceName) {
+		ServerLevel level = p.level();
+		if (pos == null || !isShopBlock(level.getBlockState(pos))) return "Regarde le coffre ou le tonneau qui servira de dépôt.";
+		if (find(level, pos) != null || depositAt(level, pos) != null) return "Ce coffre est déjà une boutique ou un dépôt.";
+		Shop service = null;
+		for (Shop s : store.shops.values()) {
+			if (s.kind == Shop.Kind.SERVICE && s.serviceName.equalsIgnoreCase(serviceName.trim()) && canManage(p, s)) service = s;
+		}
+		if (service == null) return "Aucun de tes services ne s'appelle « " + serviceName + " ».";
+		Deposit d = new Deposit();
+		d.shopId = service.id;
+		d.serviceName = service.serviceName;
+		d.world = world(level);
+		d.x = pos.getX();
+		d.y = pos.getY();
+		d.z = pos.getZ();
+		d.created = System.currentTimeMillis();
+		store.deposits.put(d.posKey(), d);
+		index.computeIfAbsent(d.world, w -> new LongOpenHashSet()).add(pos.asLong());
+		store.markDirty();
+		return null;
+	}
+
+	public void removeDeposit(Deposit d) {
+		store.deposits.remove(d.posKey());
+		LongOpenHashSet set = index.get(d.world);
+		if (set != null) set.remove(BlockPos.asLong(d.x, d.y, d.z));
+		store.markDirty();
+	}
+
+	/** Noms des services que ce joueur peut gérer (suggestions de commande). */
+	public List<String> serviceNames(ServerPlayer p) {
+		List<String> out = new ArrayList<>();
+		for (Shop s : store.shops.values()) if (s.kind == Shop.Kind.SERVICE && canManage(p, s)) out.add(s.serviceName);
+		return out;
+	}
+
+	/** Signal de redstone sur le coffre (et l'autre moitié d'un double coffre) après une vente. */
+	private void salePulse(Shop s) {
+		int ticks = SumeniumEco.config().signalVenteTicks;
+		ServerLevel level = level(s);
+		if (ticks <= 0 || level == null) return;
+		Redstone.pulse(level, pos(s), ticks);
+		BlockPos other = connectedHalf(level, pos(s));
+		if (other != null) Redstone.pulse(level, other, ticks);
 	}
 
 	// ------------------------------------------------------------------ clients
@@ -631,6 +784,7 @@ public final class Shops {
 			else s.outOfStockNotified = false;
 		}
 		updateSign(s);
+		salePulse(s);
 	}
 
 	private Voucher issueVoucher(ServerPlayer p, Shop s) {
@@ -719,6 +873,7 @@ public final class Shops {
 		s.revenue += total;
 		store.markDirty();
 		SumeniumEco.txlog().add(tx);
+		salePulse(s);
 		Msg.send(p, Msg.ok("Le FISC t'achète ").append(Msg.item(model, count))
 				.append(Component.literal(" : +").withStyle(ChatFormatting.GREEN)).append(Msg.money(total))
 				.append(Component.literal(to.isFaction() ? " (banque de faction)" : "").withStyle(ChatFormatting.GRAY)));
@@ -1066,6 +1221,7 @@ public final class Shops {
 	public void remove(Shop s, ServerPlayer actor, boolean refund) {
 		store.shops.remove(s.posKey());
 		unindex(s);
+		for (Deposit d : new ArrayList<>(store.deposits.values())) if (d.shopId.equals(s.id)) removeDeposit(d);
 		store.markDirty();
 		long back = 0;
 		Account owner = ownerAccount(s);

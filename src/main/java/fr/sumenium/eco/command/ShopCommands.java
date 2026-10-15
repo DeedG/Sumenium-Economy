@@ -51,6 +51,12 @@ public final class ShopCommands {
 				.then(literal("liste").executes(ShopCommands::list))
 				.then(literal("supprimer").executes(ShopCommands::delete))
 				.then(literal("panneau").executes(ShopCommands::sign))
+				.then(literal("depot")
+						.then(literal("retirer").executes(ShopCommands::removeDeposit))
+						.then(argument("service", StringArgumentType.greedyString())
+								.suggests((c, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+										SumeniumEco.shops().serviceNames(c.getSource().getPlayerOrException()), b))
+								.executes(ShopCommands::createDeposit)))
 				.then(literal("faction").executes(ctx -> transfer(ctx, true)))
 				.then(literal("perso").executes(ctx -> transfer(ctx, false)))
 				.then(literal("prix")
@@ -155,6 +161,7 @@ public final class ShopCommands {
 				{"/boutique liste", "tes boutiques et celles de ta faction"},
 				{"/boutique prix <prix> [quantité]", "changer le prix"},
 				{"/boutique panneau", "réécrire ou poser le panneau"},
+				{"/boutique depot <service>", "coffre de dépôt des bons (signal redstone)"},
 				{"/boutique faction | perso", "donner à la faction / reprendre"},
 				{"/boutique supprimer", "supprimer (50 % remboursés)"},
 				{"/compte · /historique · /baltop", "argent, historique, classement"},
@@ -166,6 +173,24 @@ public final class ShopCommands {
 					.append(Component.literal(" : " + l[1]).withStyle(ChatFormatting.GRAY)), false);
 		}
 		return 1;
+	}
+
+	private static int createDeposit(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		ServerPlayer p = Cmd.player(ctx);
+		String error = SumeniumEco.shops().createDeposit(p, Shops.target(p), StringArgumentType.getString(ctx, "service"));
+		if (error != null) return Cmd.err(ctx, error);
+		return Cmd.ok(ctx, "Dépôt créé : quand un joueur y pose un bon valide et referme le coffre, le bon est consommé et le coffre émet un signal de redstone.");
+	}
+
+	private static int removeDeposit(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		ServerPlayer p = Cmd.player(ctx);
+		BlockPos pos = Shops.target(p);
+		var d = pos == null ? null : SumeniumEco.shops().depositAt(p.level(), pos);
+		if (d == null) return Cmd.err(ctx, "Regarde un coffre de dépôt.");
+		Shop s = SumeniumEco.shops().shopById(d.shopId);
+		if (s != null && !SumeniumEco.shops().canManage(p, s)) return Cmd.err(ctx, "Ce dépôt n'est pas à toi.");
+		SumeniumEco.shops().removeDeposit(d);
+		return Cmd.ok(ctx, "Ce coffre n'est plus un dépôt.");
 	}
 
 	private static int sign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

@@ -29,6 +29,8 @@ public final class DataStore {
 	/** clé de position -> boutique */
 	public final Map<String, Shop> shops = new LinkedHashMap<>();
 	public final Map<String, Voucher> vouchers = new LinkedHashMap<>();
+	/** clé de position -> dépôt de service */
+	public final Map<String, Deposit> deposits = new LinkedHashMap<>();
 	public Meta meta = new Meta();
 
 	private final Path dir;
@@ -56,6 +58,7 @@ public final class DataStore {
 		factions.clear();
 		shops.clear();
 		vouchers.clear();
+		deposits.clear();
 		List<PlayerData> p = read("joueurs.json", new TypeToken<List<PlayerData>>() {}.getType());
 		if (p != null) for (PlayerData d : p) players.put(d.uuid, d);
 		List<Faction> f = read("factions.json", new TypeToken<List<Faction>>() {}.getType());
@@ -64,6 +67,8 @@ public final class DataStore {
 		if (s != null) for (Shop d : s) shops.put(d.posKey(), d);
 		List<Voucher> v = read("bons.json", new TypeToken<List<Voucher>>() {}.getType());
 		if (v != null) for (Voucher d : v) vouchers.put(d.id, d);
+		List<Deposit> dp = read("depots.json", new TypeToken<List<Deposit>>() {}.getType());
+		if (dp != null) for (Deposit d : dp) deposits.put(d.posKey(), d);
 		Meta m = read("meta.json", Meta.class);
 		if (m != null) meta = m;
 		dirty = false;
@@ -76,6 +81,7 @@ public final class DataStore {
 		write("factions.json", new ArrayList<>(factions.values()));
 		write("boutiques.json", new ArrayList<>(shops.values()));
 		write("bons.json", new ArrayList<>(vouchers.values()));
+		write("depots.json", new ArrayList<>(deposits.values()));
 		write("meta.json", meta);
 		dirty = false;
 	}

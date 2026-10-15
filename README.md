@@ -32,6 +32,7 @@ Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent
 | `/boutique creer item <prix> <quantité>` | Regarder un coffre ou un tonneau, l'item à vendre en main. Le prix est pour la quantité (ex. `20 16` = 16 items pour 20 Su) |
 | `/boutique creer service <prix> <nom du bon>` | Service à stock infini : l'acheteur reçoit un bon nommé |
 | `/boutique info` · `liste` · `supprimer` · `prix <prix> [quantité]` | Gérer ses boutiques (supprimer rembourse 50 % des frais) |
+| `/boutique depot <service>` · `/boutique depot retirer` | Le coffre visé devient le dépôt d'un de tes services : un bon valide déposé est consommé à la fermeture et le coffre émet un signal de redstone |
 | `/boutique panneau` | Réécrit le panneau, en reprend un accroché au coffre ou en pose un neuf |
 | `/boutique faction` · `/boutique perso` | Donner sa boutique à sa faction (tous les membres ravitaillent) ou la reprendre |
 | `/bon verifier` · `/bon valider` | Vérifier un bon en main / le valider (vendeur du service) |
@@ -44,6 +45,8 @@ Les montants s'écrivent avec un point : `/boutique creer item 3.5 16`.
 **Acheter** : clic droit sur le coffre ou sur son panneau. Le chat affiche l'item (survolable), le prix et le stock ; on tape ensuite la quantité voulue dans le chat (`32`, `tout` ou `annuler`, 30 s pour répondre). Ce message n'est pas envoyé aux autres joueurs.
 **Vendre au FISC** : pareil, clic sur le coffre du FISC puis la quantité à vendre (ou `tout`).
 **Ravitailler** : le propriétaire et les membres de la faction ouvrent le coffre normalement ; le panneau et le stock se mettent à jour à la fermeture.
+
+**Redstone** : à chaque vente, le coffre de la boutique émet un signal de redstone d'une seconde (poudre, répéteur, comparateur ou lampe collés au coffre). Réglable avec `signalVenteTicks`.
 
 **Panneau** : un panneau posé sur le coffre (contre une face, au-dessus, ou suspendu) est rattaché automatiquement : il affiche le propriétaire, l'item, le prix et le stock, et il est ciré pour que personne ne le modifie. Les panneaux des anciennes boutiques Savs sont repris de la même façon.
 

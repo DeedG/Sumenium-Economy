@@ -25,6 +25,10 @@ public final class Config {
 	public double fraisBoutiqueService = 300;
 	/** Part des frais remboursée quand la boutique est supprimée (0.5 = 50 %). */
 	public double remboursementSuppression = 0.5;
+	/** Durée du signal de redstone émis par le coffre d'une boutique à chaque vente (ticks, 20 = 1 s ; 0 = aucun). */
+	public int signalVenteTicks = 20;
+	/** Durée du signal émis par un dépôt de service quand un bon valide y est déposé (ticks). */
+	public int signalDepotTicks = 20;
 	/** Taxe du FISC sur chaque vente entre joueurs (0 = désactivée, 0.05 = 5 %). */
 	public double taxeVente = 0.0;
 

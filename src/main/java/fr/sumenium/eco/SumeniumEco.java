@@ -89,6 +89,7 @@ public final class SumeniumEco implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(s -> {
 			if (!ready) return;
 			int tick = s.getTickCount();
+			fr.sumenium.eco.shop.Redstone.tick(s);
 			if (tick % 20 == 0) {
 				Afk.tick(s);
 				shops.tickWatchers(s);

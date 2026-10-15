@@ -8,7 +8,8 @@
 		"ServerExplosionMixin",
 		"TransportItemTargetMixin",
 		"BaseContainerBlockEntityMixin",
-		"CompoundContainerMixin"
+		"CompoundContainerMixin",
+		"BlockStateSignalMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
