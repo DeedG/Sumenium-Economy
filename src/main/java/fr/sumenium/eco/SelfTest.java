@@ -270,12 +270,13 @@ final class SelfTest {
 			}
 		}
 		Container depot = Shops.container(level, w4);
-		depot.setItem(0, bon);
+		String bonId = Shops.voucherId(bon);
+		depot.setItem(0, bon.copy());
 		var depo = SumeniumEco.shops().depositAt(level, w4);
 		boolean accepted = depo != null && SumeniumEco.shops().checkDeposit(depo, seller);
 		check(out, derr == null && accepted && depot.getItem(0).isEmpty()
 				&& fr.sumenium.eco.shop.Redstone.isPowered(level, w4)
-				&& SumeniumEco.store().vouchers.get(Shops.voucherId(bon)).usedBy != null,
+				&& bonId != null && SumeniumEco.store().vouchers.get(bonId).usedBy != null,
 				"dépôt : bon accepté, consommé, signal émis " + (derr == null ? "" : derr));
 		depot.setItem(0, bon.copy());
 		check(out, !SumeniumEco.shops().checkDeposit(depo, seller) && !depot.getItem(0).isEmpty(), "dépôt : bon déjà utilisé refusé et laissé");
