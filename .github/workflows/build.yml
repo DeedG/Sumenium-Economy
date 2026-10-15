@@ -29,9 +29,20 @@ jobs:
           echo "eula=true" > run/eula.txt
           printf "online-mode=false\nlevel-type=minecraft\\:flat\ngenerate-structures=false\n" > run/server.properties
           timeout 600 gradle runSelftest --stacktrace || true
-          echo "::notice title=selftest::$(head -1 run/selftest.txt) — $(grep -c '^OK' run/selftest.txt) vérifications OK"
-          grep '^ECHEC' run/selftest.txt | while IFS= read -r line; do echo "::error title=selftest::$line"; done
-          grep -iE "mixin.*(error|fail)|exception" run/logs/latest.log | head -20 | while IFS= read -r line; do echo "::warning title=log::$line"; done
+          echo "::notice title=selftest vanilla::$(head -1 run/selftest.txt) — $(grep -c '^OK' run/selftest.txt) vérifications OK"
+          grep '^ECHEC' run/selftest.txt | while IFS= read -r line; do echo "::error title=selftest vanilla::$line"; done
+          grep -q "SELFTEST OK" run/selftest.txt
+      - name: Test de démarrage avec Lithium (comme le serveur)
+        if: always()
+        run: |
+          rm -rf run/world run/sumenium-data run/config/savs-common-economy run/selftest.txt
+          mkdir -p run/mods
+          url=$(curl -s 'https://api.modrinth.com/v2/project/lithium/version?game_versions=%5B%2226.3%22%5D&loaders=%5B%22fabric%22%5D' | jq -r '.[0].files[0].url')
+          echo "Lithium : $url"
+          curl -sL -o run/mods/lithium.jar "$url"
+          timeout 600 gradle runSelftest --stacktrace || true
+          echo "::notice title=selftest lithium::$(head -1 run/selftest.txt) — $(grep -c '^OK' run/selftest.txt) vérifications OK — $url"
+          grep '^ECHEC' run/selftest.txt | while IFS= read -r line; do echo "::error title=selftest lithium::$line"; done
           grep -q "SELFTEST OK" run/selftest.txt
       - name: Logs du serveur
         if: always()

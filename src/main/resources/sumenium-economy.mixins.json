@@ -7,7 +7,9 @@
 		"ServerPlayerMixin",
 		"HopperBlockEntityMixin",
 		"ServerExplosionMixin",
-		"TransportItemTargetMixin"
+		"TransportItemTargetMixin",
+		"BaseContainerBlockEntityMixin",
+		"CompoundContainerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

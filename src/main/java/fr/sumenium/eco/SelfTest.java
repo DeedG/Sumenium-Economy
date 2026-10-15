@@ -188,9 +188,12 @@ final class SelfTest {
 		Shops.container(level, chest2).setItem(0, new ItemStack(net.minecraft.world.item.Items.COAL, 10));
 		var hopper = (net.minecraft.world.level.block.entity.HopperBlockEntity) level.getBlockEntity(chest2.below());
 		net.minecraft.world.level.block.entity.HopperBlockEntity.suckInItems(level, hopper);
-		check(out, err == null && hopper.isEmpty()
-				&& Items.count(Shops.container(level, chest2), new ItemStack(net.minecraft.world.item.Items.COAL)) == 10,
-				"entonnoir bloqué sous une boutique");
+		int coalLeft = Items.count(Shops.container(level, chest2), new ItemStack(net.minecraft.world.item.Items.COAL));
+		check(out, err == null && hopper.isEmpty() && coalLeft == 10,
+				"entonnoir bloqué sous une boutique (err=" + err + ", entonnoir vide=" + hopper.isEmpty() + ", reste=" + coalLeft
+						+ ", protégé=" + SumeniumEco.isProtected(level, chest2) + ")");
+		check(out, !Shops.container(level, chest2).canTakeItem(hopper, 0, new ItemStack(net.minecraft.world.item.Items.COAL)),
+				"extraction refusée au niveau du coffre");
 
 		// Sommeil : un joueur AFK ne compte pas
 		var sleep = new net.minecraft.server.players.SleepStatus();
