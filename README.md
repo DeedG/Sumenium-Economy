@@ -26,7 +26,9 @@ Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent
 | --- | --- |
 | `/compte` | Solde perso, banque de faction et compte utilisé |
 | `/compte perso` · `/compte faction` | Choisir le compte utilisé pour acheter et créer des boutiques (faction : chef et trésoriers) |
-| `/historique [page]` | Ventes, achats, frais, dépôts (30 derniers jours) |
+| `/historique [page]` | Ventes, achats, frais, dépôts (30 derniers jours) : montant sur ton compte et sur la banque de ta faction |
+| `/baltop [page]` · `/baltop factions [page]` | Classement des joueurs ou des banques de faction |
+| `/boutique` | Aide des commandes de boutique |
 | `/boutique creer item <prix> <quantité>` | Regarder un coffre ou un tonneau, l'item à vendre en main. Le prix est pour la quantité (ex. `20 16` = 16 items pour 20 Su) |
 | `/boutique creer service <prix> <nom du bon>` | Service à stock infini : l'acheteur reçoit un bon nommé |
 | `/boutique info` · `liste` · `supprimer` · `prix <prix> [quantité]` | Gérer ses boutiques (supprimer rembourse 50 % des frais) |

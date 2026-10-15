@@ -47,6 +47,15 @@ public final class AccountCommands {
 				.then(argument("page", IntegerArgumentType.integer(1)).executes(ctx ->
 						history(ctx, IntegerArgumentType.getInteger(ctx, "page")))));
 
+		d.register(literal("baltop")
+				.executes(ctx -> baltop(ctx, false, 1))
+				.then(argument("page", IntegerArgumentType.integer(1)).executes(ctx ->
+						baltop(ctx, false, IntegerArgumentType.getInteger(ctx, "page"))))
+				.then(literal("factions")
+						.executes(ctx -> baltop(ctx, true, 1))
+						.then(argument("page", IntegerArgumentType.integer(1)).executes(ctx ->
+								baltop(ctx, true, IntegerArgumentType.getInteger(ctx, "page"))))));
+
 		d.register(literal("eco")
 				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 				.then(literal("voir").then(argument("joueur", StringArgumentType.word()).suggests(Cmd.PLAYERS)
@@ -110,29 +119,99 @@ public final class AccountCommands {
 		Cmd.ok(ctx, Msg.info("Historique (page " + page + ") — " + SumeniumEco.config().historiqueJours + " derniers jours"));
 		for (int i = from; i < Math.min(list.size(), from + PAGE); i++) {
 			Tx tx = list.get(i);
-			boolean in = me.equals(tx.to) || (fac != null && fac.equals(tx.to));
-			boolean out = me.equals(tx.from) || (fac != null && fac.equals(tx.from));
-			boolean sale = Tx.ACHAT.equals(tx.type) || Tx.ACHAT_SERVICE.equals(tx.type);
-			// le vendeur reçoit le montant moins la taxe
-			long shown = in && !out ? tx.amount - (sale ? tx.tax : 0) : (out && !in ? -tx.amount : 0);
-			MutableComponent line = Component.literal(DATE.format(Instant.ofEpochMilli(tx.t)) + " ").withStyle(ChatFormatting.DARK_GRAY)
-					.append(Component.literal(label(tx) + " ").withStyle(ChatFormatting.GRAY));
-			if (tx.itemName != null) {
-				line.append(Component.literal((tx.qty > 0 ? tx.qty + "× " : "") + tx.itemName + " ").withStyle(ChatFormatting.WHITE));
-			}
-			String other = in ? tx.fromName : tx.toName;
-			if (sale) other = in ? tx.actorName : tx.toName;
-			if (other != null) line.append(Component.literal("(" + other + ") ").withStyle(ChatFormatting.DARK_GRAY));
-			if (shown != 0) {
-				line.append(Component.literal((shown > 0 ? "+" : "") + Money.format(shown))
-						.withStyle(shown > 0 ? ChatFormatting.GREEN : ChatFormatting.RED));
-			}
-			ctx.getSource().sendSuccess(() -> line, false);
+			ctx.getSource().sendSuccess(() -> historyLine(tx, me, fac, d.uuid), false);
 		}
 		if (list.size() > from + PAGE) {
 			ctx.getSource().sendSuccess(() -> Msg.prefix().append(Msg.command("Page suivante", "/historique " + (page + 1))), false);
 		}
 		return 1;
+	}
+
+	/** Classement des plus riches : joueurs (compte perso) ou banques de faction, 10 par page. */
+	private static int baltop(CommandContext<CommandSourceStack> ctx, boolean factions, int page) {
+		record Row(String name, long amount, boolean me) {}
+		ServerPlayer viewer = ctx.getSource().getPlayer();
+		PlayerData vd = viewer == null ? null : SumeniumEco.accounts().player(viewer);
+		Faction vf = vd == null ? null : SumeniumEco.accounts().factionOf(vd);
+		java.util.List<Row> rows = new java.util.ArrayList<>();
+		if (factions) {
+			for (Faction f : SumeniumEco.store().factions.values()) rows.add(new Row(f.tag, f.bank, f == vf));
+		} else {
+			for (PlayerData p : SumeniumEco.store().players.values()) {
+				if (p.name != null) rows.add(new Row(p.name, p.balance, vd != null && p.uuid.equals(vd.uuid)));
+			}
+		}
+		rows.sort((a, b) -> Long.compare(b.amount, a.amount));
+		int pages = Math.max(1, (rows.size() + PAGE - 1) / PAGE);
+		if (page > pages) return Cmd.err(ctx, "Il n'y a que " + pages + " page(s).");
+		long total = rows.stream().mapToLong(Row::amount).sum();
+		Cmd.ok(ctx, Msg.info((factions ? "Banques des factions" : "Joueurs les plus riches") + " — page " + page + "/" + pages
+				+ " — total ").append(Msg.money(total)));
+		for (int i = (page - 1) * PAGE; i < Math.min(rows.size(), page * PAGE); i++) {
+			Row r = rows.get(i);
+			MutableComponent line = Component.literal(String.format("%2d. ", i + 1)).withStyle(ChatFormatting.GRAY)
+					.append(Component.literal(r.name + " ").withStyle(r.me ? ChatFormatting.AQUA : ChatFormatting.WHITE))
+					.append(Msg.money(r.amount));
+			ctx.getSource().sendSuccess(() -> line, false);
+		}
+		for (int i = 0; i < rows.size(); i++) {
+			if (rows.get(i).me && (i < (page - 1) * PAGE || i >= page * PAGE)) {
+				int rank = i + 1;
+				ctx.getSource().sendSuccess(() -> Msg.info((factions ? "Ta faction est " : "Tu es ") + rank + "e."), false);
+			}
+		}
+		MutableComponent nav = Msg.prefix();
+		if (page > 1) nav.append(Msg.command("« Page précédente", "/baltop " + (factions ? "factions " : "") + (page - 1))).append(Component.literal("  "));
+		if (page < pages) nav.append(Msg.command("Page suivante »", "/baltop " + (factions ? "factions " : "") + (page + 1)));
+		if (page > 1 || page < pages) ctx.getSource().sendSuccess(() -> nav, false);
+		return 1;
+	}
+
+	/** Variation d'un compte dans une transaction (le vendeur reçoit le montant moins la taxe). */
+	private static long delta(Tx tx, String account) {
+		if (account == null) return 0;
+		boolean sale = Tx.ACHAT.equals(tx.type) || Tx.ACHAT_SERVICE.equals(tx.type);
+		long d = 0;
+		if (account.equals(tx.from)) d -= tx.amount;
+		if (account.equals(tx.to)) d += tx.amount - (sale ? tx.tax : 0);
+		return d;
+	}
+
+	/** Une ligne d'historique vue par le joueur : son compte perso d'abord, puis la banque de sa faction. */
+	public static MutableComponent historyLine(Tx tx, String me, String fac, String uuid) {
+		boolean sale = Tx.ACHAT.equals(tx.type) || Tx.ACHAT_SERVICE.equals(tx.type);
+		boolean seller = sale && (me.equals(tx.to) || (fac != null && fac.equals(tx.to)));
+		MutableComponent line = Component.literal(DATE.format(Instant.ofEpochMilli(tx.t)) + " ").withStyle(ChatFormatting.DARK_GRAY)
+				.append(Component.literal(label(tx, seller) + " ").withStyle(ChatFormatting.GRAY));
+		if (tx.itemName != null && !Tx.DEPOT_FACTION.equals(tx.type) && !Tx.RETRAIT_FACTION.equals(tx.type)) {
+			line.append(Component.literal((tx.qty > 0 ? tx.qty + "× " : "") + tx.itemName + " ").withStyle(ChatFormatting.WHITE));
+		}
+		String other = switch (tx.type) {
+			case Tx.ACHAT, Tx.ACHAT_SERVICE -> seller ? tx.actorName : tx.toName;
+			case Tx.DEPOT_FACTION, Tx.RETRAIT_FACTION -> uuid.equals(tx.actor) ? null : tx.actorName;
+			case Tx.ADMIN -> "par " + tx.actorName;
+			case Tx.BON_UTILISE -> tx.note;
+			default -> null;
+		};
+		if (other != null) line.append(Component.literal("(" + other + ") ").withStyle(ChatFormatting.DARK_GRAY));
+		long perso = delta(tx, me);
+		long bank = delta(tx, fac);
+		if (perso != 0) line.append(signed(perso)).append(Component.literal(" "));
+		if (bank != 0) {
+			line.append(Component.literal("banque ").withStyle(ChatFormatting.DARK_AQUA)).append(signed(bank));
+		}
+		return line;
+	}
+
+	private static MutableComponent signed(long cents) {
+		return Component.literal((cents > 0 ? "+" : "") + Money.format(cents))
+				.withStyle(cents > 0 ? ChatFormatting.GREEN : ChatFormatting.RED);
+	}
+
+	private static String label(Tx tx, boolean seller) {
+		if (Tx.ACHAT.equals(tx.type)) return seller ? "Vente" : "Achat";
+		if (Tx.ACHAT_SERVICE.equals(tx.type)) return seller ? "Vente service" : "Achat service";
+		return label(tx);
 	}
 
 	private static String label(Tx tx) {

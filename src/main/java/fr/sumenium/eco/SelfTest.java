@@ -254,6 +254,21 @@ final class SelfTest {
 		check(out, voucher && ds.balance == sellerBefore - 30_000 && team.bank == bankBefore + 30_000,
 				"bon de service acheté par un membre (perso -> banque faction)");
 
+		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
+		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();
+		dep.t = System.currentTimeMillis();
+		dep.type = fr.sumenium.eco.data.Tx.DEPOT_FACTION;
+		dep.actor = ds.uuid;
+		dep.from = "joueur:" + ds.uuid;
+		dep.to = "faction:EquipeTest";
+		dep.amount = 5_000;
+		String depLine = fr.sumenium.eco.command.AccountCommands.historyLine(dep, "joueur:" + ds.uuid, "faction:EquipeTest", ds.uuid).getString();
+		check(out, depLine.contains("-50 Su") && depLine.contains("banque +50 Su"), "historique dépôt faction : " + depLine);
+		dep.type = fr.sumenium.eco.data.Tx.ACHAT_SERVICE;
+		dep.tax = 0;
+		String seen = fr.sumenium.eco.command.AccountCommands.historyLine(dep, "joueur:" + ds.uuid, "faction:EquipeTest", ds.uuid).getString();
+		check(out, seen.contains("-50 Su") && seen.contains("banque +50 Su"), "historique achat dans la boutique de sa faction : " + seen);
+
 		// Suppression par le propriétaire : remboursement 50 %
 		long b2 = ds.balance;
 		SumeniumEco.shops().remove(SumeniumEco.shops().at(level, chest), seller, true);

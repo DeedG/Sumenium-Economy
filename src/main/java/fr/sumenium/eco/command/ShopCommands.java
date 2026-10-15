@@ -36,6 +36,8 @@ public final class ShopCommands {
 
 	public static void register(CommandDispatcher<CommandSourceStack> d) {
 		d.register(literal("boutique")
+				.executes(ShopCommands::help)
+				.then(literal("aide").executes(ShopCommands::help))
 				.then(literal("creer")
 						.then(literal("item")
 								.then(argument("prix", DoubleArgumentType.doubleArg(0.01))
@@ -142,6 +144,27 @@ public final class ShopCommands {
 		if (s == null) return Cmd.err(ctx, "Regarde une boutique.");
 		if (!SumeniumEco.shops().canManage(p, s)) return Cmd.err(ctx, "Ce n'est pas ta boutique.");
 		SumeniumEco.shops().remove(s, p, true);
+		return 1;
+	}
+
+	private static int help(CommandContext<CommandSourceStack> ctx) {
+		String[][] lines = {
+				{"/boutique creer item <prix> <quantité>", "créer (item en main, regarder le coffre)"},
+				{"/boutique creer service <prix> <nom>", "créer un service (bons)"},
+				{"/boutique info", "offre, stock, ventes"},
+				{"/boutique liste", "tes boutiques et celles de ta faction"},
+				{"/boutique prix <prix> [quantité]", "changer le prix"},
+				{"/boutique panneau", "réécrire ou poser le panneau"},
+				{"/boutique faction | perso", "donner à la faction / reprendre"},
+				{"/boutique supprimer", "supprimer (50 % remboursés)"},
+				{"/compte · /historique · /baltop", "argent, historique, classement"},
+		};
+		Cmd.ok(ctx, Msg.info("Boutiques : clic sur le coffre ou le panneau, puis la quantité dans le chat."));
+		for (String[] l : lines) {
+			ctx.getSource().sendSuccess(() -> Component.literal(" " + l[0]).withStyle(s -> s.withColor(ChatFormatting.AQUA)
+					.withClickEvent(new net.minecraft.network.chat.ClickEvent.SuggestCommand(l[0].split(" <")[0].split(" \\[")[0] + " ")))
+					.append(Component.literal(" : " + l[1]).withStyle(ChatFormatting.GRAY)), false);
+		}
 		return 1;
 	}
 
