@@ -283,6 +283,11 @@ public final class Shops {
 
 	/** Ligne de description d'une boutique (avec l'item survolable). */
 	public MutableComponent describe(Shop s, boolean withStock) {
+		return describe(s, withStock, null);
+	}
+
+	/** Idem, avec le prix de rachat propre au joueur si les prix dynamiques sont actifs. */
+	public MutableComponent describe(Shop s, boolean withStock, ServerPlayer viewer) {
 		ItemStack item = Items.decode(s.item);
 		MutableComponent c = Msg.prefix();
 		switch (s.kind) {
@@ -305,7 +310,7 @@ public final class Shops {
 					.append(Component.literal(" pour ").withStyle(ChatFormatting.YELLOW))
 					.append(Msg.money(s.price));
 			case FISC_RACHAT -> {
-				String scope = dynamicScope(null);
+				String scope = dynamicScope(viewer);
 				double f = dynamic.currentFactor(scope, s.itemId);
 				c.append(Component.literal("Le FISC rachète ").withStyle(ChatFormatting.YELLOW))
 						.append(Msg.item(item))
@@ -404,11 +409,14 @@ public final class Shops {
 		}
 		s.salesCount++;
 		s.itemsMoved += tx.qty;
-		s.revenue += net;
+		s.revenue += seller != null ? net : s.price;
 		store.markDirty();
 		SumeniumEco.txlog().add(tx);
 		if (seller != null) notifySale(s, p, net, tx.qty);
-		if (s.kind == Shop.Kind.ITEM && s.lastStock < s.quantity) outOfStock(s);
+		if (s.kind == Shop.Kind.ITEM) {
+			if (s.lastStock < s.quantity) outOfStock(s);
+			else s.outOfStockNotified = false;
+		}
 	}
 
 	private Voucher issueVoucher(ServerPlayer p, Shop s) {
@@ -465,7 +473,7 @@ public final class Shops {
 		}
 		ItemStack held = p.getMainHandItem();
 		if (held.isEmpty() || !ItemStack.isSameItem(held, model)) {
-			Msg.send(p, describe(s, false));
+			Msg.send(p, describe(s, false, p));
 			Msg.send(p, Msg.info("Clique avec l'item en main pour vendre le stack, accroupi pour tout vendre."));
 			return;
 		}

@@ -74,6 +74,7 @@ public final class SumeniumEco implements ModInitializer {
 			shops.rebuildIndex();
 			ready = true;
 			exporter.requestExport();
+			if (SelfTest.enabled()) SelfTest.run(s);
 		});
 		ServerLifecycleEvents.SERVER_STOPPING.register(s -> {
 			if (!ready) return;

@@ -20,6 +20,18 @@ dependencies {
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
+loom {
+	runs {
+		// Démarre un serveur, vérifie le mod (SelfTest) puis s'arrête : utilisé par la CI.
+		selftest {
+			server()
+			name "Selftest"
+			runDir "run"
+			vmArg "-Dsumeco.selftest=true"
+		}
+	}
+}
+
 processResources {
 	inputs.property "version", project.version
 	filesMatching("fabric.mod.json") {

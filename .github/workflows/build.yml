@@ -23,3 +23,14 @@ jobs:
         with:
           name: sumenium-economy
           path: build/libs/*.jar
+      - name: Test de démarrage (serveur 26.3 réel)
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf "online-mode=false\nlevel-type=minecraft\\:flat\ngenerate-structures=false\n" > run/server.properties
+          timeout 600 gradle runSelftest --stacktrace || true
+          cat run/selftest.txt
+          grep -q "SELFTEST OK" run/selftest.txt
+      - name: Logs du serveur
+        if: always()
+        run: tail -n 200 run/logs/latest.log || true
