@@ -56,6 +56,17 @@ Les montants s'écrivent avec un point : `/boutique creer item 3.5 16`.
 
 Les boutiques sont protégées : seuls les membres ouvrent et cassent ; entonnoirs, wagonnets à entonnoir, golems de cuivre et explosions n'y touchent pas ; personne ne peut coller un coffre pour faire un double coffre.
 
+## Hôtel des ventes (V2)
+
+| Commande | Effet |
+| --- | --- |
+| Clic droit sur le PNJ | Menu des annonces ; clic sur un item puis l'offre dans le chat (`achat` = achat immédiat) |
+| `/hdv vendre <prix de départ> [achat immédiat]` | Près du PNJ, met en vente le stack tenu en main (7 jours) |
+| `/hdv annonces` · `/hdv annuler <n°>` | Ses annonces ; retirer une annonce sans offre |
+| Clic droit sur la boîte aux lettres | Récupérer ses items gagnés ou invendus |
+
+Admins : `/hdv pnj [retirer]`, `/hdv boite [retirer]`, `/annuaire lutrin|retirer`. Réglages : `hdvAnnoncesMax` (3), `hdvDureeJours` (7), `hdvTaxe` (0.15), `hdvSurenchereMin` (0.05), `hdvProlongationMinutes` (5).
+
 ## Admins
 
 | Commande | Effet |
@@ -89,6 +100,8 @@ Tout est dans `sumenium-data/` à la racine du serveur, à récupérer en SFTP :
 - `export/factions.json`, `export/comptes.json`, `export/prix-fisc.json`
 - `export/stats.json` : argent en circulation, totaux des 7 derniers jours, top des ventes, rachats FISC
 - `export/masse-monetaire.jsonl` : un point par heure pour tracer la courbe de l'argent en circulation
+- `export/hdv.json` : annonces de l'hôtel des ventes
+- `export/bluemap-markers.json` : boutiques, FISC et hôtel des ventes au format des marqueurs BlueMap
 - `journal/AAAA-MM-JJ.jsonl` : chaque transaction, une par ligne
 - `data/` : données internes du mod (ne pas modifier serveur allumé)
 
