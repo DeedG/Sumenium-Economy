@@ -19,18 +19,14 @@ public final class Config {
 	// --- Boutiques ---
 	/** Frais de création d'une boutique d'item. */
 	public double fraisBoutiqueItem = 150;
+	/** Frais si le propriétaire a déjà une boutique de la même famille (laines, bois…). */
+	public double fraisBoutiqueMemeFamille = 50;
 	/** Frais de création d'une boutique de service. */
 	public double fraisBoutiqueService = 300;
 	/** Part des frais remboursée quand la boutique est supprimée (0.5 = 50 %). */
 	public double remboursementSuppression = 0.5;
 	/** Taxe du FISC sur chaque vente entre joueurs (0 = désactivée, 0.05 = 5 %). */
 	public double taxeVente = 0.0;
-	/** Délai pour confirmer un achat par un second clic (secondes). */
-	public int delaiConfirmationAchat = 5;
-	/** Boutiques autorisées seulement dans une zone (désactivé si zoneActive = false). */
-	public boolean zoneActive = false;
-	public String zoneMonde = "minecraft:overworld";
-	public int zoneX1 = -100, zoneZ1 = -100, zoneX2 = 100, zoneZ2 = 100;
 
 	// --- Prix dynamiques du FISC (rachat) ---
 	/** "aucun", "joueur" ou "faction". */

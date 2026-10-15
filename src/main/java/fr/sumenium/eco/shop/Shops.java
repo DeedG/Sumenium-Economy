@@ -1,6 +1,5 @@
 package fr.sumenium.eco.shop;
 
-import fr.sumenium.eco.Accounts;
 import fr.sumenium.eco.Accounts.Account;
 import fr.sumenium.eco.Config;
 import fr.sumenium.eco.SumeniumEco;
@@ -45,20 +44,41 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-/** Boutiques : création, achats, rachat FISC, protections, alertes de stock. */
+/**
+ * Boutiques : création, transactions (clic puis quantité tapée dans le chat),
+ * rachat FISC, panneaux, protections et alertes de stock.
+ */
 public final class Shops {
 
 	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
 			.withZone(fr.sumenium.eco.data.TxLog.ZONE);
+	/** Temps laissé pour taper la quantité dans le chat. */
+	private static final long CHAT_DELAY_MS = 30_000;
+	/** Distance max entre le joueur et la boutique quand il tape la quantité. */
+	private static final double MAX_DISTANCE_SQ = 12 * 12;
+	/** Quantité "tout". */
+	public static final int ALL = Integer.MAX_VALUE;
 
 	private final DataStore store;
+	/** Positions protégées (coffres et panneaux des boutiques), par monde : très rapide pour les mixins. */
 	private final Map<String, LongOpenHashSet> index = new HashMap<>();
-	/** Achat en attente de confirmation : joueur -> (clé boutique, échéance ms). */
+	/** clé du panneau -> boutique */
+	private final Map<String, Shop> signs = new HashMap<>();
+	/** Transaction en attente de la quantité tapée dans le chat. */
 	private final Map<UUID, Pending> pending = new HashMap<>();
+	/** Membres qui ont ouvert le coffre d'une boutique : on met le stock à jour à la fermeture. */
+	private final Map<UUID, String> watching = new HashMap<>();
+	/** Admins en mode gestion (/sumeco bypass) : ils ouvrent et cassent toutes les boutiques. */
+	private final Set<UUID> bypass = new HashSet<>();
 	public final DynamicPrices dynamic = new DynamicPrices();
 
 	private record Pending(String shopKey, long until) {}
@@ -71,19 +91,33 @@ public final class Shops {
 
 	public void rebuildIndex() {
 		index.clear();
+		signs.clear();
 		for (Shop s : store.shops.values()) index(s);
 	}
 
 	private void index(Shop s) {
-		index.computeIfAbsent(s.world, w -> new LongOpenHashSet()).add(BlockPos.asLong(s.x, s.y, s.z));
+		LongOpenHashSet set = index.computeIfAbsent(s.world, w -> new LongOpenHashSet());
+		set.add(BlockPos.asLong(s.x, s.y, s.z));
+		if (s.hasSign()) {
+			set.add(BlockPos.asLong(s.signX, s.signY, s.signZ));
+			signs.put(s.signKey(), s);
+		}
 	}
 
 	private void unindex(Shop s) {
 		LongOpenHashSet set = index.get(s.world);
 		if (set != null) set.remove(BlockPos.asLong(s.x, s.y, s.z));
+		unindexSign(s);
 	}
 
-	private static final Map<Object, String> WORLD_NAMES = new java.util.IdentityHashMap<>();
+	private void unindexSign(Shop s) {
+		if (!s.hasSign()) return;
+		LongOpenHashSet set = index.get(s.world);
+		if (set != null) set.remove(BlockPos.asLong(s.signX, s.signY, s.signZ));
+		signs.remove(s.signKey());
+	}
+
+	private static final Map<Object, String> WORLD_NAMES = new IdentityHashMap<>();
 
 	public static String world(Level level) {
 		// appelé très souvent par les entonnoirs : on évite de recréer la chaîne à chaque fois
@@ -106,6 +140,12 @@ public final class Shops {
 		if (s != null) return s;
 		BlockPos other = connectedHalf(level, pos);
 		return other == null ? null : at(level, other);
+	}
+
+	/** Boutique dont ce bloc est le panneau. */
+	public Shop bySign(Level level, BlockPos pos) {
+		if (!indexed(level, pos)) return null;
+		return signs.get(Shop.key(world(level), pos.getX(), pos.getY(), pos.getZ()));
 	}
 
 	/** Appelé par les mixins (entonnoirs, explosions, golems) : rapide. */
@@ -158,6 +198,19 @@ public final class Shops {
 		return p.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
 	}
 
+	/** Mode gestion admin : bascule et renvoie le nouvel état. */
+	public boolean toggleBypass(ServerPlayer p) {
+		if (!bypass.remove(p.getUUID())) {
+			bypass.add(p.getUUID());
+			return true;
+		}
+		return false;
+	}
+
+	public boolean hasBypass(ServerPlayer p) {
+		return bypass.contains(p.getUUID()) && isAdmin(p);
+	}
+
 	/** Propriétaire ou membre de la faction propriétaire. */
 	public boolean isMember(ServerPlayer p, Shop s) {
 		String uuid = p.getUUID().toString();
@@ -171,8 +224,9 @@ public final class Shops {
 		};
 	}
 
+	/** Peut gérer (prix, suppression, casse) : membres, admins pour le FISC, ou mode gestion. */
 	public boolean canManage(ServerPlayer p, Shop s) {
-		return isMember(p, s) || isAdmin(p);
+		return isMember(p, s) || hasBypass(p) || (s.isFisc() && isAdmin(p));
 	}
 
 	public Account ownerAccount(Shop s) {
@@ -220,12 +274,26 @@ public final class Shops {
 	public InteractionResult onUse(ServerPlayer p, Level level, InteractionHand hand, BlockHitResult hit) {
 		BlockPos pos = hit.getBlockPos();
 		Shop s = find(level, pos);
+		boolean onSign = false;
+		if (s == null) {
+			s = bySign(level, pos);
+			onSign = s != null;
+		}
 		if (s != null) {
-			if (isMember(p, s) || (isAdmin(p) && (p.isCreative() || p.isShiftKeyDown()))) {
-				return InteractionResult.PASS; // ouverture normale pour ravitailler
+			boolean member = isMember(p, s) || hasBypass(p);
+			if (member && !onSign) {
+				// ouverture normale pour ravitailler ; stock et panneau mis à jour à la fermeture
+				watching.put(p.getUUID(), s.posKey());
+				if (!s.hasSign()) linkSign(s);
+				return InteractionResult.PASS;
 			}
 			if (hand != InteractionHand.MAIN_HAND) return InteractionResult.FAIL;
-			customerClick(p, s);
+			if (member) {
+				Msg.send(p, describe(s, true, p));
+				Msg.send(p, Msg.info(s.salesCount + " vente(s), chiffre d'affaires ").append(Msg.money(s.revenue)));
+			} else {
+				customerClick(p, s);
+			}
 			return InteractionResult.SUCCESS;
 		}
 		// Empêche de coller un coffre à une boutique dont on n'est pas membre (double coffre).
@@ -244,9 +312,10 @@ public final class Shops {
 		return InteractionResult.PASS;
 	}
 
-	/** Avant de casser un bloc : seuls les membres (et les admins) cassent une boutique. */
+	/** Avant de casser un bloc : seuls les membres (et le mode gestion admin) cassent une boutique ou son panneau. */
 	public boolean beforeBreak(ServerPlayer p, Level level, BlockPos pos) {
 		Shop s = find(level, pos);
+		if (s == null) s = bySign(level, pos);
 		if (s == null) return true;
 		if (canManage(p, s)) return true;
 		Msg.send(p, Msg.err("Cette boutique appartient à " + ownerName(s) + "."));
@@ -255,27 +324,91 @@ public final class Shops {
 
 	public void afterBreak(ServerPlayer p, Level level, BlockPos pos) {
 		Shop s = at(level, pos);
-		if (s != null) remove(s, p, true);
+		if (s != null) {
+			remove(s, p, true);
+			return;
+		}
+		Shop bySign = bySign(level, pos);
+		if (bySign != null) {
+			unindexSign(bySign);
+			bySign.signX = bySign.signY = bySign.signZ = null;
+			bySign.signCache = null;
+			store.markDirty();
+		}
+	}
+
+	/** Chaque seconde : met à jour les boutiques dont un membre vient de fermer le coffre. */
+	public void tickWatchers(MinecraftServer server) {
+		if (watching.isEmpty()) return;
+		Iterator<Map.Entry<UUID, String>> it = watching.entrySet().iterator();
+		while (it.hasNext()) {
+			var e = it.next();
+			ServerPlayer p = server.getPlayerList().getPlayer(e.getKey());
+			if (p != null && p.containerMenu != p.inventoryMenu) continue; // encore ouvert
+			it.remove();
+			Shop s = store.shops.get(e.getValue());
+			if (s != null) refreshStock(s);
+		}
 	}
 
 	// ------------------------------------------------------------------ clients
 
 	private void customerClick(ServerPlayer p, Shop s) {
+		Msg.send(p, describe(s, true, p));
 		if (s.kind == Shop.Kind.FISC_RACHAT) {
-			fiscBuyback(p, s);
-			return;
+			int have = countInInventory(p, Items.decode(s.item));
+			Msg.send(p, Msg.info("Combien veux-tu en vendre ? Tape un nombre dans le chat ou « tout » (tu en as " + have + ")."));
+		} else {
+			Msg.send(p, Msg.info("Combien veux-tu en acheter ? Tape un nombre dans le chat ou « tout », avec ")
+					.append(accountLabel(p)).append(Component.literal(".").withStyle(ChatFormatting.YELLOW)));
 		}
-		long now = System.currentTimeMillis();
+		pending.put(p.getUUID(), new Pending(s.posKey(), System.currentTimeMillis() + CHAT_DELAY_MS));
+	}
+
+	/**
+	 * Message du chat : si le joueur doit indiquer une quantité, on l'utilise et
+	 * le message n'est pas envoyé aux autres. Renvoie true si le message est consommé.
+	 */
+	public boolean onChat(ServerPlayer p, String raw) {
 		Pending pend = pending.get(p.getUUID());
-		if (pend != null && pend.shopKey.equals(s.posKey()) && now <= pend.until) {
+		if (pend == null) return false;
+		if (System.currentTimeMillis() > pend.until) {
 			pending.remove(p.getUUID());
-			purchase(p, s);
-			return;
+			return false;
 		}
-		pending.put(p.getUUID(), new Pending(s.posKey(), now + SumeniumEco.config().delaiConfirmationAchat * 1000L));
-		Msg.send(p, describe(s, true));
-		Msg.send(p, Msg.info("Clique encore dans les " + SumeniumEco.config().delaiConfirmationAchat
-				+ " s pour acheter avec ").append(accountLabel(p)).append(Component.literal(".").withStyle(ChatFormatting.YELLOW)));
+		String text = raw.trim().toLowerCase(Locale.ROOT);
+		if (text.equals("annuler") || text.equals("stop") || text.equals("non")) {
+			pending.remove(p.getUUID());
+			Msg.send(p, Msg.info("Transaction annulée."));
+			return true;
+		}
+		int amount;
+		if (text.equals("tout") || text.equals("max") || text.equals("all")) {
+			amount = ALL;
+		} else {
+			try {
+				amount = Integer.parseInt(text);
+			} catch (NumberFormatException e) {
+				pending.remove(p.getUUID()); // message normal : on laisse passer et on oublie la transaction
+				return false;
+			}
+			if (amount <= 0) {
+				Msg.send(p, Msg.err("Quantité invalide."));
+				return true;
+			}
+		}
+		pending.remove(p.getUUID());
+		Shop s = store.shops.get(pend.shopKey);
+		if (s == null) {
+			Msg.send(p, Msg.err("Cette boutique n'existe plus."));
+			return true;
+		}
+		if (!Shops.world(p.level()).equals(s.world) || p.blockPosition().distSqr(pos(s)) > MAX_DISTANCE_SQ) {
+			Msg.send(p, Msg.err("Tu es trop loin de la boutique."));
+			return true;
+		}
+		trade(p, s, amount);
+		return true;
 	}
 
 	private MutableComponent accountLabel(ServerPlayer p) {
@@ -284,12 +417,11 @@ public final class Shops {
 				.withStyle(ChatFormatting.WHITE);
 	}
 
-	/** Ligne de description d'une boutique (avec l'item survolable). */
 	public MutableComponent describe(Shop s, boolean withStock) {
 		return describe(s, withStock, null);
 	}
 
-	/** Idem, avec le prix de rachat propre au joueur si les prix dynamiques sont actifs. */
+	/** Ligne de description d'une boutique (avec l'item survolable). */
 	public MutableComponent describe(Shop s, boolean withStock, ServerPlayer viewer) {
 		ItemStack item = Items.decode(s.item);
 		MutableComponent c = Msg.prefix();
@@ -313,8 +445,7 @@ public final class Shops {
 					.append(Component.literal(" pour ").withStyle(ChatFormatting.YELLOW))
 					.append(Msg.money(s.price));
 			case FISC_RACHAT -> {
-				String scope = dynamicScope(viewer);
-				double f = dynamic.currentFactor(scope, s.itemId);
+				double f = dynamic.currentFactor(dynamicScope(viewer), s.itemId);
 				c.append(Component.literal("Le FISC rachète ").withStyle(ChatFormatting.YELLOW))
 						.append(Msg.item(item))
 						.append(Component.literal(" à ").withStyle(ChatFormatting.YELLOW))
@@ -325,11 +456,41 @@ public final class Shops {
 		return c;
 	}
 
-	private void purchase(ServerPlayer p, Shop s) {
+	/** Place libre dans l'inventaire principal pour cet item. */
+	private static int freeSpace(ServerPlayer p, ItemStack model) {
+		int max = Math.max(1, model.getMaxStackSize());
+		int free = 0;
+		for (ItemStack st : p.getInventory().getNonEquipmentItems()) {
+			if (st.isEmpty()) free += max;
+			else if (Items.same(st, model)) free += Math.max(0, max - st.getCount());
+		}
+		return free;
+	}
+
+	private static int countInInventory(ServerPlayer p, ItemStack model) {
+		if (model.isEmpty()) return 0;
+		int n = 0;
+		var inv = p.getInventory();
+		for (int i = 0; i < inv.getContainerSize(); i++) {
+			ItemStack st = inv.getItem(i);
+			if (!st.isEmpty() && ItemStack.isSameItem(st, model)) n += st.getCount();
+		}
+		return n;
+	}
+
+	/** Réalise la transaction pour `amount` items (ou ALL). */
+	public void trade(ServerPlayer p, Shop s, int amount) {
+		if (s.kind == Shop.Kind.FISC_RACHAT) {
+			fiscBuyback(p, s, amount);
+		} else {
+			purchase(p, s, amount);
+		}
+	}
+
+	private void purchase(ServerPlayer p, Shop s, int amount) {
 		ServerLevel level = p.level();
 		Config cfg = SumeniumEco.config();
-		Accounts accounts = SumeniumEco.accounts();
-		Account buyer = accounts.active(p);
+		Account buyer = SumeniumEco.accounts().active(p);
 		Account seller = ownerAccount(s);
 		ItemStack model = Items.decode(s.item);
 
@@ -345,6 +506,19 @@ public final class Shops {
 			Msg.send(p, Msg.err("Item de la boutique illisible, préviens un admin."));
 			return;
 		}
+
+		// nombre de lots : demandés, en stock, payables, et qui rentrent dans l'inventaire
+		int lots;
+		int perLot = s.kind == Shop.Kind.SERVICE ? 1 : s.quantity;
+		if (amount == ALL) lots = Integer.MAX_VALUE;
+		else {
+			lots = amount / perLot;
+			if (lots == 0) {
+				Msg.send(p, Msg.err("Cette boutique vend par lots de " + perLot + "."));
+				return;
+			}
+		}
+		String limit = null;
 		Container box = null;
 		if (s.kind == Shop.Kind.ITEM) {
 			box = container(level, pos(s));
@@ -354,53 +528,86 @@ public final class Shops {
 			}
 			int stock = Items.count(box, model);
 			s.lastStock = stock;
-			if (stock < s.quantity) {
-				Msg.send(p, Msg.err("Rupture de stock."));
-				outOfStock(s);
-				return;
+			if (stock / perLot < lots) {
+				lots = stock / perLot;
+				limit = "stock";
 			}
 		}
-		if (!buyer.withdraw(s.price)) {
-			Msg.send(p, Msg.err("Fonds insuffisants sur " + (buyer.isFaction() ? "la banque de ta faction" : "ton compte")
-					+ " (" + Money.format(buyer.balance()) + ")."));
+		if (s.kind == Shop.Kind.SERVICE && lots > 16) {
+			lots = 16;
+			limit = "16 bons maximum à la fois";
+		}
+		if (s.price > 0 && buyer.balance() / s.price < lots) {
+			lots = (int) (buyer.balance() / s.price);
+			limit = "fonds";
+		}
+		if (s.kind != Shop.Kind.SERVICE) {
+			int space = freeSpace(p, model) / perLot;
+			if (space < lots) {
+				lots = space;
+				limit = "place dans l'inventaire";
+			}
+		} else if (p.getInventory().getFreeSlot() < 0) {
+			lots = 0;
+			limit = "place dans l'inventaire";
+		}
+		if (lots <= 0) {
+			switch (limit == null ? "" : limit) {
+				case "stock" -> {
+					Msg.send(p, Msg.err("Rupture de stock."));
+					outOfStock(s);
+				}
+				case "fonds" -> Msg.send(p, Msg.err("Fonds insuffisants sur " + (buyer.isFaction() ? "la banque de ta faction" : "ton compte")
+						+ " (" + Money.format(buyer.balance()) + ")."));
+				default -> Msg.send(p, Msg.err("Pas assez de place dans ton inventaire."));
+			}
 			return;
 		}
 
-		long tax = s.kind == Shop.Kind.FISC_VENTE ? s.price : Math.round(s.price * cfg.taxeVente);
-		long net = s.price - tax;
+		long total = s.price * lots;
+		if (!buyer.withdraw(total)) {
+			Msg.send(p, Msg.err("Fonds insuffisants."));
+			return;
+		}
+		int items = lots * perLot;
+		long tax = s.kind == Shop.Kind.FISC_VENTE ? total : Math.round(total * cfg.taxeVente);
+		long net = total - tax;
 		Tx tx = baseTx(p, s);
 		tx.from = buyer.ref();
 		tx.fromName = buyer.label();
-		tx.amount = s.price;
+		tx.amount = total;
 		tx.tax = tax;
+		tx.qty = items;
 
 		switch (s.kind) {
 			case ITEM -> {
-				Items.remove(box, model, s.quantity);
-				Items.give(p, model, s.quantity);
+				Items.remove(box, model, items);
+				Items.give(p, model, items);
 				s.lastStock = Items.count(box, model);
 				tx.type = Tx.ACHAT;
-				tx.qty = s.quantity;
-				Msg.send(p, Msg.ok("Achat : ").append(Msg.item(model, s.quantity))
-						.append(Component.literal(" pour ").withStyle(ChatFormatting.GREEN)).append(Msg.money(s.price)));
 			}
 			case SERVICE -> {
-				Voucher v = issueVoucher(p, s);
+				List<String> ids = new ArrayList<>();
+				for (int i = 0; i < lots; i++) ids.add(issueVoucher(p, s).id);
 				tx.type = Tx.ACHAT_SERVICE;
-				tx.qty = 1;
-				tx.note = "bon " + v.id;
-				Msg.send(p, Msg.ok("Bon « " + s.serviceName + " » acheté pour ").append(Msg.money(s.price))
-						.append(Component.literal(". Remets-le à " + ownerName(s) + ".").withStyle(ChatFormatting.GREEN)));
+				tx.note = "bons " + String.join(",", ids);
 			}
 			case FISC_VENTE -> {
-				Items.give(p, model, s.quantity);
+				Items.give(p, model, items);
 				tx.type = Tx.ACHAT_FISC;
-				tx.qty = s.quantity;
-				Msg.send(p, Msg.ok("Achat au FISC : ").append(Msg.item(model, s.quantity))
-						.append(Component.literal(" pour ").withStyle(ChatFormatting.GREEN)).append(Msg.money(s.price)));
 			}
 			default -> {
 			}
+		}
+		if (s.kind == Shop.Kind.SERVICE) {
+			Msg.send(p, Msg.ok(lots + " bon(s) « " + s.serviceName + " » acheté(s) pour ").append(Msg.money(total))
+					.append(Component.literal(". Remets-le à " + ownerName(s) + ".").withStyle(ChatFormatting.GREEN)));
+		} else {
+			Msg.send(p, Msg.ok("Achat : ").append(Msg.item(model, items))
+					.append(Component.literal(" pour ").withStyle(ChatFormatting.GREEN)).append(Msg.money(total)));
+		}
+		if (limit != null && amount != ALL) {
+			Msg.send(p, Msg.info("Quantité réduite (" + limit + ")."));
 		}
 		if (seller != null) {
 			seller.add(net);
@@ -411,20 +618,21 @@ public final class Shops {
 			tx.toName = "FISC";
 		}
 		s.salesCount++;
-		s.itemsMoved += tx.qty;
-		s.revenue += seller != null ? net : s.price;
+		s.itemsMoved += items;
+		s.revenue += seller != null ? net : total;
 		store.markDirty();
 		SumeniumEco.txlog().add(tx);
-		if (seller != null) notifySale(s, p, net, tx.qty);
+		if (seller != null) notifySale(s, p, net, s.kind == Shop.Kind.SERVICE ? lots : items);
 		if (s.kind == Shop.Kind.ITEM) {
 			if (s.lastStock < s.quantity) outOfStock(s);
 			else s.outOfStockNotified = false;
 		}
+		updateSign(s);
 	}
 
 	private Voucher issueVoucher(ServerPlayer p, Shop s) {
 		Voucher v = new Voucher();
-		v.id = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+		v.id = UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
 		v.shopId = s.id;
 		v.serviceName = s.serviceName;
 		v.sellerName = ownerName(s);
@@ -435,7 +643,7 @@ public final class Shops {
 		store.vouchers.put(v.id, v);
 
 		ItemStack paper = new ItemStack(net.minecraft.world.item.Items.PAPER);
-		paper.set(DataComponents.CUSTOM_NAME, Component.literal(s.serviceName).withStyle(s2 -> s2.withItalic(false).withColor(ChatFormatting.GOLD)));
+		paper.set(DataComponents.CUSTOM_NAME, Component.literal(s.serviceName).withStyle(st -> st.withItalic(false).withColor(ChatFormatting.GOLD)));
 		List<Component> lore = new ArrayList<>();
 		lore.add(Component.literal("Bon de service").withStyle(ChatFormatting.GRAY));
 		lore.add(Component.literal("Vendu par " + v.sellerName).withStyle(ChatFormatting.GRAY));
@@ -468,36 +676,33 @@ public final class Shops {
 		return "joueur:" + d.uuid;
 	}
 
-	private void fiscBuyback(ServerPlayer p, Shop s) {
+	private void fiscBuyback(ServerPlayer p, Shop s, int amount) {
 		ItemStack model = Items.decode(s.item);
 		if (model.isEmpty()) {
 			Msg.send(p, Msg.err("Item de rachat illisible, préviens un admin."));
 			return;
 		}
-		ItemStack held = p.getMainHandItem();
-		if (held.isEmpty() || !ItemStack.isSameItem(held, model)) {
-			Msg.send(p, describe(s, false, p));
-			Msg.send(p, Msg.info("Clique avec l'item en main pour vendre le stack, accroupi pour tout vendre."));
+		int have = countInInventory(p, model);
+		int count = amount == ALL ? have : Math.min(amount, have);
+		if (count <= 0) {
+			Msg.send(p, Msg.err("Tu n'as pas cet item sur toi."));
 			return;
 		}
-		int count = 0;
-		if (p.isShiftKeyDown()) {
-			var inv = p.getInventory();
-			for (int i = 0; i < inv.getContainerSize(); i++) {
-				ItemStack st = inv.getItem(i);
-				if (!st.isEmpty() && ItemStack.isSameItem(st, model)) {
-					count += st.getCount();
-					inv.setItem(i, ItemStack.EMPTY);
-				}
+		var inv = p.getInventory();
+		int left = count;
+		for (int i = 0; i < inv.getContainerSize() && left > 0; i++) {
+			ItemStack st = inv.getItem(i);
+			if (!st.isEmpty() && ItemStack.isSameItem(st, model)) {
+				int take = Math.min(left, st.getCount());
+				st.shrink(take);
+				if (st.isEmpty()) inv.setItem(i, ItemStack.EMPTY);
+				left -= take;
 			}
-		} else {
-			count = held.getCount();
-			p.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 		}
 		p.containerMenu.broadcastChanges();
 		Account to = SumeniumEco.accounts().active(p);
-		long amount = dynamic.sell(dynamicScope(p), s.itemId, s.price, count);
-		to.add(amount);
+		long total = dynamic.sell(dynamicScope(p), s.itemId, s.price, count);
+		to.add(total);
 		Tx tx = baseTx(p, s);
 		tx.type = Tx.RACHAT_FISC;
 		tx.from = "fisc";
@@ -505,14 +710,14 @@ public final class Shops {
 		tx.to = to.ref();
 		tx.toName = to.label();
 		tx.qty = count;
-		tx.amount = amount;
+		tx.amount = total;
 		s.salesCount++;
 		s.itemsMoved += count;
-		s.revenue += amount;
+		s.revenue += total;
 		store.markDirty();
 		SumeniumEco.txlog().add(tx);
 		Msg.send(p, Msg.ok("Le FISC t'achète ").append(Msg.item(model, count))
-				.append(Component.literal(" : +").withStyle(ChatFormatting.GREEN)).append(Msg.money(amount))
+				.append(Component.literal(" : +").withStyle(ChatFormatting.GREEN)).append(Msg.money(total))
 				.append(Component.literal(to.isFaction() ? " (banque de faction)" : "").withStyle(ChatFormatting.GRAY)));
 	}
 
@@ -530,11 +735,45 @@ public final class Shops {
 		return tx;
 	}
 
+	// ------------------------------------------------------------------ panneaux
+
+	/** Cherche et rattache un panneau posé sur le coffre de la boutique. */
+	public void linkSign(Shop s) {
+		ServerLevel level = level(s);
+		if (level == null || !level.isLoaded(pos(s))) return;
+		List<BlockPos> parts = new ArrayList<>(2);
+		parts.add(pos(s));
+		BlockPos other = connectedHalf(level, pos(s));
+		if (other != null) parts.add(other);
+		BlockPos sign = ShopSigns.find(level, parts, p -> bySign(level, p) != null);
+		if (sign == null) return;
+		s.signX = sign.getX();
+		s.signY = sign.getY();
+		s.signZ = sign.getZ();
+		s.signCache = null;
+		index(s);
+		store.markDirty();
+		updateSign(s);
+	}
+
+	/** Réécrit le panneau si besoin ; le détache s'il a disparu. */
+	public void updateSign(Shop s) {
+		if (!s.hasSign()) return;
+		ServerLevel level = level(s);
+		if (level == null) return;
+		if (!ShopSigns.write(level, s, ShopSigns.ownerLabel(s), ShopSigns.ownerColor(s))) {
+			unindexSign(s);
+			s.signX = s.signY = s.signZ = null;
+			s.signCache = null;
+			store.markDirty();
+		}
+	}
+
 	// ------------------------------------------------------------------ notifications
 
 	private void notifySale(Shop s, ServerPlayer buyer, long net, int qty) {
 		MinecraftServer server = SumeniumEco.server();
-		String what = s.kind == Shop.Kind.SERVICE ? "« " + s.serviceName + " »" : qty + "× " + s.itemName;
+		String what = s.kind == Shop.Kind.SERVICE ? qty + "× « " + s.serviceName + " »" : qty + "× " + s.itemName;
 		for (String uuid : owners(s)) {
 			ServerPlayer o = server.getPlayerList().getPlayer(UUID.fromString(uuid));
 			if (o != null) {
@@ -568,13 +807,15 @@ public final class Shops {
 
 	/** Met à jour le stock connu si le coffre est chargé ; renvoie -1 si inconnu. */
 	public int refreshStock(Shop s) {
-		if (s.kind != Shop.Kind.ITEM) return -1;
+		if (s.kind != Shop.Kind.ITEM) {
+			updateSign(s);
+			return -1;
+		}
 		ServerLevel level = level(s);
 		if (level == null || !level.isLoaded(pos(s))) return s.lastStock;
 		Container box = container(level, pos(s));
 		if (box == null) return s.lastStock;
-		ItemStack model = Items.decode(s.item);
-		int stock = Items.count(box, model);
+		int stock = Items.count(box, Items.decode(s.item));
 		if (stock != s.lastStock) {
 			s.lastStock = stock;
 			store.markDirty();
@@ -585,10 +826,11 @@ public final class Shops {
 		} else if (stock < s.quantity) {
 			outOfStock(s);
 		}
+		updateSign(s);
 		return stock;
 	}
 
-	/** Contrôle régulier : stocks, et boutiques dont le coffre a disparu. */
+	/** Contrôle régulier : stocks, panneaux, et boutiques dont le coffre a disparu. */
 	public void refreshAll() {
 		for (Shop s : new ArrayList<>(store.shops.values())) {
 			ServerLevel level = level(s);
@@ -598,11 +840,12 @@ public final class Shops {
 				remove(s, null, false);
 				continue;
 			}
+			if (!s.hasSign()) linkSign(s);
 			refreshStock(s);
 		}
 	}
 
-	/** Récap à la connexion. */
+	/** Récap à la connexion : seulement les boutiques du joueur et de sa faction. */
 	public void loginRecap(ServerPlayer p) {
 		PlayerData d = SumeniumEco.accounts().player(p);
 		if (d.offlineSales > 0) {
@@ -635,15 +878,6 @@ public final class Shops {
 
 	// ------------------------------------------------------------------ création / suppression
 
-	public boolean inZone(Level level, BlockPos pos) {
-		Config c = SumeniumEco.config();
-		if (!c.zoneActive) return true;
-		if (!world(level).equals(c.zoneMonde)) return false;
-		int minX = Math.min(c.zoneX1, c.zoneX2), maxX = Math.max(c.zoneX1, c.zoneX2);
-		int minZ = Math.min(c.zoneZ1, c.zoneZ2), maxZ = Math.max(c.zoneZ1, c.zoneZ2);
-		return pos.getX() >= minX && pos.getX() <= maxX && pos.getZ() >= minZ && pos.getZ() <= maxZ;
-	}
-
 	/** Bloc visé par le joueur (5 blocs max). */
 	public static BlockPos target(ServerPlayer p) {
 		var hit = p.pick(5.0, 1.0f, false);
@@ -653,20 +887,32 @@ public final class Shops {
 		return null;
 	}
 
-	/**
-	 * Crée une boutique sur le coffre visé.
-	 * @return message d'erreur, ou null si tout s'est bien passé
-	 */
+	/** Frais de création : réduits si le propriétaire a déjà une boutique de la même famille d'items. */
+	public long creationFee(Shop.Kind kind, Shop.OwnerType ownerType, String ownerId, String itemId) {
+		Config cfg = SumeniumEco.config();
+		if (kind == Shop.Kind.SERVICE) return Money.toCents(cfg.fraisBoutiqueService);
+		String family = Family.of(itemId);
+		for (Shop other : store.shops.values()) {
+			if (other.kind == Shop.Kind.ITEM && other.ownerType == ownerType && other.ownerId.equals(ownerId)
+					&& Family.of(other.itemId).equals(family)) {
+				return Money.toCents(cfg.fraisBoutiqueMemeFamille);
+			}
+		}
+		return Money.toCents(cfg.fraisBoutiqueItem);
+	}
+
 	public String create(ServerPlayer p, Shop.Kind kind, long price, int quantity, String serviceName, boolean admin) {
 		return create(p, target(p), kind, price, quantity, serviceName, admin);
 	}
 
+	/**
+	 * Crée une boutique sur le coffre indiqué.
+	 * @return message d'erreur, ou null si tout s'est bien passé
+	 */
 	public String create(ServerPlayer p, BlockPos pos, Shop.Kind kind, long price, int quantity, String serviceName, boolean admin) {
 		ServerLevel level = p.level();
 		if (pos == null || !isShopBlock(level.getBlockState(pos))) return "Regarde un coffre ou un tonneau.";
 		if (find(level, pos) != null) return "Ce coffre est déjà une boutique.";
-		BlockPos other = connectedHalf(level, pos);
-		if (!admin && !inZone(level, pos)) return "Les boutiques se créent dans la zone commerciale du spawn.";
 		if (price < 0 || (kind != Shop.Kind.FISC_RACHAT && price == 0 && !admin)) return "Prix invalide.";
 
 		ItemStack model = ItemStack.EMPTY;
@@ -701,16 +947,15 @@ public final class Shops {
 			s.ownerType = Shop.OwnerType.FISC;
 			s.ownerId = "fisc";
 		} else {
-			Config cfg = SumeniumEco.config();
 			Account acc = SumeniumEco.accounts().active(p);
-			long fee = Money.toCents(kind == Shop.Kind.SERVICE ? cfg.fraisBoutiqueService : cfg.fraisBoutiqueItem);
+			s.ownerType = acc.isFaction() ? Shop.OwnerType.FACTION : Shop.OwnerType.JOUEUR;
+			s.ownerId = acc.isFaction() ? acc.faction.id : acc.player.uuid;
+			long fee = creationFee(kind, s.ownerType, s.ownerId, s.itemId);
 			if (!acc.withdraw(fee)) {
 				return "Il faut " + Money.format(fee) + " sur " + (acc.isFaction() ? "la banque de ta faction" : "ton compte")
 						+ " pour créer cette boutique.";
 			}
 			s.feePaid = fee;
-			s.ownerType = acc.isFaction() ? Shop.OwnerType.FACTION : Shop.OwnerType.JOUEUR;
-			s.ownerId = acc.isFaction() ? acc.faction.id : acc.player.uuid;
 			Tx tx = baseTx(p, s);
 			tx.type = Tx.FRAIS_BOUTIQUE;
 			tx.from = acc.ref();
@@ -724,10 +969,7 @@ public final class Shops {
 		store.shops.put(s.posKey(), s);
 		index(s);
 		store.markDirty();
-		if (other != null && !admin) {
-			// double coffre : l'autre moitié est protégée automatiquement
-			SumeniumEco.LOGGER.debug("Boutique sur double coffre {} / {}", pos, other);
-		}
+		linkSign(s);
 		refreshStock(s);
 		SumeniumEco.exporter().requestExport();
 		return null;
@@ -776,6 +1018,8 @@ public final class Shops {
 		store.shops.put(s.posKey(), s);
 		index(s);
 		store.markDirty();
+		linkSign(s);
+		refreshStock(s);
 	}
 
 	public List<Shop> ownedBy(PlayerData d) {

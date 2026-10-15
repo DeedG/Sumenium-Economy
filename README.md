@@ -12,9 +12,8 @@ Il remplace **Savs Common Economy** et le datapack **afk display**.
 4. Copier `sumenium-economy-x.y.z.jar` dans `mods/` (avec Fabric API, déjà présent).
 5. Démarrer le serveur, puis en jeu (op) :
    - `/sumeco importer-savs` : reprend les soldes et les boutiques (les boutiques ADMIN deviennent des boutiques du FISC ; les anciens certificats papier sont ignorés).
-   - `/faction admin importer-equipes` : crée une faction par équipe vanilla existante, avec ses membres.
+   - `/faction admin importer-equipes` : crée une faction par équipe vanilla qui contient de vrais joueurs. Les équipes des datapacks (BACAP `bac_team_*`, AFK) sont ignorées et jamais modifiées.
    - `/faction admin role <joueur> chef` : un chef par faction.
-   - `/sumeco zone coin1` et `/sumeco zone coin2` à deux coins de la zone commerciale, puis `/sumeco zone activer`.
 6. Vérifier les prix du FISC (ex. cuivre deepslate à 3,5) : regarder le coffre et `/fisc prix 3.5`.
 
 Le jar compilé et testé est publié automatiquement sur la branche [`builds`](https://github.com/DeedG/Sumenium-Economy/tree/builds) à chaque modification. On peut aussi le compiler avec `gradle build` (Java 25).
@@ -28,7 +27,7 @@ Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent
 | `/compte` | Solde perso, banque de faction et compte utilisé |
 | `/compte perso` · `/compte faction` | Choisir le compte utilisé pour acheter et créer des boutiques (faction : chef et trésoriers) |
 | `/historique [page]` | Ventes, achats, frais, dépôts (30 derniers jours) |
-| `/boutique creer item <prix> <quantité>` | Regarder un coffre ou un tonneau, l'item à vendre en main |
+| `/boutique creer item <prix> <quantité>` | Regarder un coffre ou un tonneau, l'item à vendre en main. Le prix est pour la quantité (ex. `20 16` = 16 items pour 20 Su) |
 | `/boutique creer service <prix> <nom du bon>` | Service à stock infini : l'acheteur reçoit un bon nommé |
 | `/boutique info` · `liste` · `supprimer` · `prix <prix> [quantité]` | Gérer ses boutiques (supprimer rembourse 50 % des frais) |
 | `/bon verifier` · `/bon valider` | Vérifier un bon en main / le valider (vendeur du service) |
@@ -38,9 +37,15 @@ Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent
 
 Les montants s'écrivent avec un point : `/boutique creer item 3.5 16`.
 
-**Acheter** : clic droit sur une boutique pour voir l'offre, second clic dans les 5 s pour acheter. L'item acheté s'affiche dans le chat et se survole.
-**Vendre au FISC** : clic droit sur le coffre du FISC avec le minerai en main (le stack), accroupi pour vendre tout l'inventaire.
-**Ravitailler** : le propriétaire et les membres de la faction ouvrent le coffre normalement.
+**Acheter** : clic droit sur le coffre ou sur son panneau. Le chat affiche l'item (survolable), le prix et le stock ; on tape ensuite la quantité voulue dans le chat (`32`, `tout` ou `annuler`, 30 s pour répondre). Ce message n'est pas envoyé aux autres joueurs.
+**Vendre au FISC** : pareil, clic sur le coffre du FISC puis la quantité à vendre (ou `tout`).
+**Ravitailler** : le propriétaire et les membres de la faction ouvrent le coffre normalement ; le panneau et le stock se mettent à jour à la fermeture.
+
+**Panneau** : un panneau posé sur le coffre (contre une face, au-dessus, ou suspendu) est rattaché automatiquement : il affiche le propriétaire, l'item, le prix et le stock, et il est ciré pour que personne ne le modifie. Les panneaux des anciennes boutiques Savs sont repris de la même façon.
+
+**Frais de création** : 150 Su pour une boutique d'item, 50 Su si le même propriétaire (joueur ou faction) a déjà une boutique de la même famille (toutes les couleurs de laine, toutes les essences de bois, etc.), 300 Su pour un service. La moitié est remboursée quand la boutique est supprimée.
+
+**Bons de service** : `/bon verifier` montre si un bon est authentique et déjà utilisé. `/bon valider` (vendeur) marque le bon comme utilisé et le retire, pour qu'il ne serve pas deux fois. C'est facultatif : pour une ferme en libre service, un coffre de dépôt suffit.
 
 Les boutiques sont protégées : seuls les membres ouvrent et cassent ; entonnoirs, wagonnets à entonnoir, golems de cuivre et explosions n'y touchent pas ; personne ne peut coller un coffre pour faire un double coffre.
 
@@ -54,20 +59,20 @@ Les boutiques sont protégées : seuls les membres ouvrent et cassent ; entonnoi
 | `/eco voir\|donner\|retirer\|definir <joueur> [montant]` | Comptes joueurs |
 | `/eco faction <faction> donner\|retirer\|definir <montant>` | Banques de faction |
 | `/faction admin creer <id> <tag> <couleur>` · `supprimer` · `ajouter` · `retirer` · `role` · `tag` · `couleur` | Factions |
-| `/sumeco stats` · `exporter` · `recharger` · `zone …` · `importer-savs` | Outils |
+| `/sumeco bypass` | Mode gestion : ouvrir et casser toutes les boutiques (à réactiver après chaque redémarrage) |
+| `/sumeco stats` · `exporter` · `recharger` · `importer-savs` | Outils |
 
-En mode créatif ou accroupi, un admin ouvre n'importe quelle boutique.
+Par défaut, un admin est un joueur comme les autres (achats, notifications de ses propres boutiques seulement). `/sumeco bypass` active le mode gestion pour ouvrir et casser n'importe quelle boutique, et le désactive.
 
 ## Configuration
 
 `config/sumenium-economy.json`, rechargeable avec `/sumeco recharger`. Principales options :
 
-- `fraisBoutiqueItem` (150), `fraisBoutiqueService` (300), `remboursementSuppression` (0.5)
+- `fraisBoutiqueItem` (150), `fraisBoutiqueMemeFamille` (50), `fraisBoutiqueService` (300), `remboursementSuppression` (0.5)
 - `taxeVente` : 0 = désactivée ; 0.05 = 5 % prélevés par le FISC sur chaque vente entre joueurs
 - `prixDynamiquesMode` : `aucun` (défaut), `joueur` ou `faction` ; avec `prixDynamiquesBaisseParLot`, `prixDynamiquesTailleLot`, `prixDynamiquesPlancher`, `prixDynamiquesRetourMinutes`
 - `factionMembresMax` (8), `factionCreationParJoueurs` (false), `factionMembresPeuventDepenser` (false)
 - `afkSecondes` (150), `afkIgnoresPourDormir` (true) : les AFK ne comptent pas pour la gamerule de sommeil
-- `zoneActive` et ses coins : boutiques des joueurs seulement dans la zone commerciale
 
 ## Fichiers pour le site
 

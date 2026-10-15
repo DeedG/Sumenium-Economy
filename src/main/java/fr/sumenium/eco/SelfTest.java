@@ -125,6 +125,13 @@ final class SelfTest {
 		PlayerData db = SumeniumEco.accounts().player(buyer);
 		ds.balance = 100_000;
 		db.balance = 50_000;
+		seller.setPos(0.5, 100, 3.5);
+		buyer.setPos(1.5, 100, 3.5);
+
+		// Panneau posé sur la face sud du coffre, avant la création de la boutique
+		BlockPos signPos = chest.south();
+		level.setBlock(signPos, Blocks.OAK_WALL_SIGN.defaultBlockState()
+				.setValue(net.minecraft.world.level.block.WallSignBlock.FACING, Direction.SOUTH), 3);
 
 		// Boutique : 16 pains pour 20 Su, frais 150
 		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.BREAD, 1));
@@ -134,19 +141,35 @@ final class SelfTest {
 		Container box = Shops.container(level, chest);
 		box.setItem(0, new ItemStack(net.minecraft.world.item.Items.BREAD, 40));
 
+		Shop shop = SumeniumEco.shops().at(level, chest);
+		check(out, shop.hasSign() && shop.signZ == signPos.getZ(), "panneau rattaché automatiquement");
+		var signBe = (net.minecraft.world.level.block.entity.SignBlockEntity) level.getBlockEntity(signPos);
+		var lines = signBe.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT).getMessages(false);
+		check(out, signBe.isWaxed() && lines.get(0).getString().equals("Vendeur") && lines.get(1).getString().equals("Bread")
+				&& lines.get(3).getString().equals("Stock : 40"),
+				"panneau écrit et ciré : " + lines.get(0).getString() + " / " + lines.get(1).getString() + " / "
+						+ lines.get(2).getString() + " / " + lines.get(3).getString());
+
 		BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(chest), Direction.UP, chest, false);
 		InteractionResult r1 = SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, hit);
-		check(out, db.balance == 50_000, "premier clic = info, pas d'achat");
-		InteractionResult r2 = SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, hit);
+		check(out, r1 == InteractionResult.SUCCESS && db.balance == 50_000, "clic = info, coffre non ouvert, pas d'achat");
+		check(out, !SumeniumEco.shops().onChat(buyer, "salut tout le monde"), "un message normal passe dans le chat");
+		SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, hit);
+		boolean consumed = SumeniumEco.shops().onChat(buyer, "32");
 		int bread = 0;
 		for (int i = 0; i < buyer.getInventory().getContainerSize(); i++) {
 			ItemStack s = buyer.getInventory().getItem(i);
 			if (s.is(net.minecraft.world.item.Items.BREAD)) bread += s.getCount();
 		}
-		check(out, r1 == InteractionResult.SUCCESS && r2 == InteractionResult.SUCCESS, "clics client interceptés (coffre non ouvert)");
-		check(out, db.balance == 48_000 && bread == 16, "achat : acheteur -20 Su, +16 pains (" + db.balance + ", " + bread + ")");
-		check(out, ds.balance == 85_000 + 2_000, "achat : vendeur +20 Su (" + ds.balance + ")");
-		check(out, Items.count(box, new ItemStack(net.minecraft.world.item.Items.BREAD)) == 24, "stock retiré du coffre");
+		check(out, consumed, "quantité tapée dans le chat consommée (pas envoyée aux autres)");
+		check(out, db.balance == 46_000 && bread == 32, "achat de 32 : acheteur -40 Su, +32 pains (" + db.balance + ", " + bread + ")");
+		check(out, ds.balance == 85_000 + 4_000, "achat : vendeur +40 Su (" + ds.balance + ")");
+		check(out, Items.count(box, new ItemStack(net.minecraft.world.item.Items.BREAD)) == 8, "stock retiré du coffre");
+		lines = signBe.getText(net.minecraft.world.level.block.entity.SignTextSlot.FRONT).getMessages(false);
+		check(out, lines.get(3).getString().equals("Rupture"), "panneau mis à jour : " + lines.get(3).getString());
+		SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND,
+				new BlockHitResult(Vec3.atCenterOf(signPos), Direction.NORTH, signPos, false));
+		check(out, SumeniumEco.shops().onChat(buyer, "annuler") && db.balance == 46_000, "clic sur le panneau + annuler");
 		check(out, SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, hit) == InteractionResult.PASS,
 				"propriétaire : ouverture normale");
 
@@ -159,6 +182,8 @@ final class SelfTest {
 				"interdit de coller un coffre (double coffre)");
 		level.explode(null, chest.getX() + 1.5, chest.getY() + 0.5, chest.getZ() + 0.5, 3f, Level.ExplosionInteraction.TNT);
 		check(out, level.getBlockState(chest).is(Blocks.CHEST), "explosion : la boutique reste");
+		check(out, level.getBlockState(signPos).is(Blocks.OAK_WALL_SIGN), "explosion : le panneau reste");
+		check(out, !SumeniumEco.shops().beforeBreak(buyer, level, signPos), "un autre joueur ne peut pas casser le panneau");
 		check(out, !level.getBlockState(neighbour).is(Blocks.OAK_PLANKS), "explosion a bien cassé le bloc voisin");
 
 		// Rachat FISC : 10 minerais de diamant à 70
@@ -167,10 +192,39 @@ final class SelfTest {
 		check(out, err == null, "boutique FISC rachat " + (err == null ? "" : err));
 		buyer.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.world.item.Items.DIAMOND_ORE, 10));
 		long before = db.balance;
-		SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND,
-				new BlockHitResult(Vec3.atCenterOf(fiscChest), Direction.UP, fiscChest, false));
+		BlockHitResult fiscHit = new BlockHitResult(Vec3.atCenterOf(fiscChest), Direction.UP, fiscChest, false);
+		SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, fiscHit);
+		SumeniumEco.shops().onChat(buyer, "4");
+		check(out, db.balance - before == 28_000 && buyer.getMainHandItem().getCount() == 6,
+				"rachat FISC 4 × 70 = 280 (" + (db.balance - before) + ")");
+		SumeniumEco.shops().onUse(buyer, level, InteractionHand.MAIN_HAND, fiscHit);
+		SumeniumEco.shops().onChat(buyer, "tout");
 		check(out, db.balance - before == 70_000 && buyer.getMainHandItem().isEmpty(),
-				"rachat FISC 10 × 70 = 700 (" + (db.balance - before) + ")");
+				"rachat FISC « tout » : total 700 (" + (db.balance - before) + ")");
+
+		// Frais par famille : planches de chêne 150, puis planches de bouleau 50
+		BlockPos w1 = base.offset(-2, 0, -2), w2 = base.offset(2, 0, -2);
+		level.setBlock(w1, Blocks.BARREL.defaultBlockState(), 3);
+		level.setBlock(w2, Blocks.BARREL.defaultBlockState(), 3);
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse("minecraft:oak_planks")), 1));
+		long b0 = ds.balance;
+		SumeniumEco.shops().create(seller, w1, Shop.Kind.ITEM, 100, 1, null, false);
+		long fee1 = b0 - ds.balance;
+		seller.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse("minecraft:birch_planks")), 1));
+		SumeniumEco.shops().create(seller, w2, Shop.Kind.ITEM, 100, 1, null, false);
+		long fee2 = b0 - fee1 - ds.balance;
+		check(out, fee1 == 15_000 && fee2 == 5_000, "frais par famille : planches de chêne " + fee1 + ", planches de bouleau " + fee2);
+		check(out, fr.sumenium.eco.shop.Family.of("minecraft:stripped_dark_oak_log").equals("stripped_log")
+				&& fr.sumenium.eco.shop.Family.of("minecraft:light_gray_concrete").equals("concrete"), "familles bois et couleurs");
+
+		// Import des équipes : on ignore les équipes de datapacks et les noms inconnus
+		var sb = server.getScoreboard();
+		sb.addPlayerToTeam("Fictif", sb.addPlayerTeam("bac_team_test"));
+		sb.addPlayerToTeam("Inconnu", sb.addPlayerTeam("EquipeVide"));
+		sb.addPlayerToTeam("Vendeur", sb.addPlayerTeam("EquipeTest"));
+		SumeniumEco.factions().importTeams();
+		check(out, !SumeniumEco.store().factions.containsKey("bac_team_test") && !SumeniumEco.store().factions.containsKey("EquipeVide")
+				&& SumeniumEco.store().factions.containsKey("EquipeTest"), "import des équipes : seulement les vraies");
 
 		// Suppression par le propriétaire : remboursement 50 %
 		long b2 = ds.balance;

@@ -3,15 +3,12 @@ package fr.sumenium.eco.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import fr.sumenium.eco.Config;
 import fr.sumenium.eco.SavsImport;
 import fr.sumenium.eco.SumeniumEco;
-import fr.sumenium.eco.shop.Shops;
 import fr.sumenium.eco.util.Msg;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -42,11 +39,7 @@ public final class AdminCommands {
 						.append(Msg.money(SumeniumEco.accounts().moneySupply()))
 						.append(Component.literal(" — " + SumeniumEco.store().shops.size() + " boutiques, "
 								+ SumeniumEco.store().factions.size() + " factions").withStyle(ChatFormatting.YELLOW)))))
-				.then(literal("zone")
-						.then(literal("coin1").executes(ctx -> corner(ctx, 1)))
-						.then(literal("coin2").executes(ctx -> corner(ctx, 2)))
-						.then(literal("activer").executes(ctx -> zone(ctx, true)))
-						.then(literal("desactiver").executes(ctx -> zone(ctx, false)))));
+				.then(literal("bypass").executes(AdminCommands::bypass)));
 	}
 
 	private static int importSavs(CommandContext<CommandSourceStack> ctx, boolean balances, boolean shops, boolean force) {
@@ -69,28 +62,10 @@ public final class AdminCommands {
 		return Cmd.ok(ctx, "Configuration rechargée.");
 	}
 
-	private static int corner(CommandContext<CommandSourceStack> ctx, int n) throws CommandSyntaxException {
+	private static int bypass(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer p = Cmd.player(ctx);
-		Config c = SumeniumEco.config();
-		BlockPos pos = p.blockPosition();
-		c.zoneMonde = Shops.world(p.level());
-		if (n == 1) {
-			c.zoneX1 = pos.getX();
-			c.zoneZ1 = pos.getZ();
-		} else {
-			c.zoneX2 = pos.getX();
-			c.zoneZ2 = pos.getZ();
-		}
-		SumeniumEco.saveConfig();
-		return Cmd.ok(ctx, "Coin " + n + " de la zone commerciale : " + pos.getX() + " " + pos.getZ()
-				+ (c.zoneActive ? "" : ". Active-la avec /sumeco zone activer"));
-	}
-
-	private static int zone(CommandContext<CommandSourceStack> ctx, boolean on) {
-		Config c = SumeniumEco.config();
-		c.zoneActive = on;
-		SumeniumEco.saveConfig();
-		return Cmd.ok(ctx, on ? "Zone commerciale active : de " + c.zoneX1 + " " + c.zoneZ1 + " à " + c.zoneX2 + " " + c.zoneZ2
-				: "Zone commerciale désactivée : boutiques possibles partout.");
+		boolean on = SumeniumEco.shops().toggleBypass(p);
+		return Cmd.ok(ctx, on ? "Mode gestion activé : tu ouvres et casses toutes les boutiques. /sumeco bypass pour l'arrêter."
+				: "Mode gestion désactivé : tu utilises les boutiques comme un joueur.");
 	}
 }

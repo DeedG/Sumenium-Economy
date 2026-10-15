@@ -46,6 +46,18 @@ public final class Shop {
 	/** Dernier stock connu en items (-1 = inconnu, ignoré pour les stocks infinis). */
 	public int lastStock = -1;
 	public boolean outOfStockNotified;
+	/** Panneau rattaché à la boutique (null si aucun). */
+	public Integer signX, signY, signZ;
+	/** Dernier texte écrit sur le panneau, pour ne le réécrire que s'il change. */
+	public transient String signCache;
+
+	public boolean hasSign() {
+		return signX != null && signY != null && signZ != null;
+	}
+
+	public String signKey() {
+		return hasSign() ? key(world, signX, signY, signZ) : null;
+	}
 
 	public boolean isFisc() {
 		return kind == Kind.FISC_RACHAT || kind == Kind.FISC_VENTE;

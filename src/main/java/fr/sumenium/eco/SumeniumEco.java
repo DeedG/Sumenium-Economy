@@ -15,6 +15,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
@@ -70,6 +71,7 @@ public final class SumeniumEco implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(s -> {
 			server = s;
 			store.load();
+			factions.cleanupDatapackTeams();
 			txlog.loadRecent();
 			shops.rebuildIndex();
 			ready = true;
@@ -87,7 +89,10 @@ public final class SumeniumEco implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(s -> {
 			if (!ready) return;
 			int tick = s.getTickCount();
-			if (tick % 20 == 0) Afk.tick(s);
+			if (tick % 20 == 0) {
+				Afk.tick(s);
+				shops.tickWatchers(s);
+			}
 			if (tick % 1200 == 0 && store.isDirty()) store.save();
 			if (tick % 6000 == 0) shops.refreshAll();
 			if (tick % 100 == 0) exporter.tick();
@@ -111,6 +116,10 @@ public final class SumeniumEco implements ModInitializer {
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!ready || level.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			return shops.onUse(sp, level, hand, hit);
+		});
+		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
+			if (!ready) return true;
+			return !shops.onChat(sender, message.signedContent());
 		});
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> {
 			if (!ready || !(player instanceof ServerPlayer sp)) return true;

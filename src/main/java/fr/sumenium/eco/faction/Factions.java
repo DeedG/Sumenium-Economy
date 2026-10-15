@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -196,9 +197,25 @@ public final class Factions {
 		List<String> report = new ArrayList<>();
 		ServerScoreboard sb = server().getScoreboard();
 		Map<String, String> uuids = nameToUuid();
+		int ignored = 0;
 		for (PlayerTeam team : new ArrayList<>(sb.getPlayerTeams())) {
 			String id = team.getName();
-			if (id.startsWith("afkDis") || team.getPlayers().isEmpty()) continue;
+			if (isDatapackTeam(id)) {
+				ignored++;
+				continue;
+			}
+			// on ne garde que les vrais joueurs (les datapacks mettent parfois des noms fictifs dans leurs équipes)
+			Map<String, String> members = new LinkedHashMap<>();
+			List<String> unknown = new ArrayList<>();
+			for (String member : team.getPlayers()) {
+				String uuid = uuids.get(member.toLowerCase(Locale.ROOT));
+				if (uuid == null) unknown.add(member);
+				else members.put(uuid, member);
+			}
+			if (members.isEmpty()) {
+				ignored++;
+				continue;
+			}
 			Faction f = store.factions.get(id);
 			int added = 0;
 			if (f == null) {
@@ -208,23 +225,40 @@ public final class Factions {
 				f = new Faction(id, tag, color);
 				store.factions.put(id, f);
 			}
-			for (String member : new ArrayList<>(team.getPlayers())) {
-				String uuid = uuids.get(member.toLowerCase(Locale.ROOT));
-				if (uuid == null) {
-					report.add("  " + member + " : UUID inconnu, à ajouter à la main");
-					continue;
-				}
-				PlayerData d = SumeniumEco.accounts().player(uuid, member);
-				if (!f.members.containsKey(uuid)) {
-					f.members.put(uuid, Faction.Role.MEMBRE);
+			for (var e : members.entrySet()) {
+				PlayerData d = SumeniumEco.accounts().player(e.getKey(), e.getValue());
+				if (!f.members.containsKey(e.getKey())) {
+					f.members.put(e.getKey(), Faction.Role.MEMBRE);
 					added++;
 				}
 				d.faction = f.id;
 			}
-			report.add(0, id + " : " + added + " membre(s) ajouté(s)");
+			report.add(id + " : " + added + " membre(s) ajouté(s)");
+			for (String u : unknown) report.add("  " + u + " : joueur inconnu, à ajouter à la main");
 		}
+		report.add(ignored + " équipe(s) ignorée(s) (datapacks ou sans joueur), elles ne sont pas modifiées");
 		store.markDirty();
 		return report;
+	}
+
+	/** Équipes créées par des datapacks (AFK, BACAP…) : jamais transformées en factions. */
+	public static boolean isDatapackTeam(String id) {
+		return id.startsWith("afkDis") || id.startsWith("bac_team_") || id.startsWith("bac_");
+	}
+
+	/** Supprime les factions vides issues d'équipes de datapacks (import de la 1.0.0). */
+	public void cleanupDatapackTeams() {
+		List<String> removed = new ArrayList<>();
+		for (Faction f : new ArrayList<>(store.factions.values())) {
+			if (isDatapackTeam(f.id) && f.members.isEmpty() && f.bank == 0) {
+				store.factions.remove(f.id);
+				removed.add(f.id);
+			}
+		}
+		if (!removed.isEmpty()) {
+			store.markDirty();
+			SumeniumEco.LOGGER.info("Factions vides de datapacks retirées : {}", removed);
+		}
 	}
 
 	private Map<String, String> nameToUuid() {
