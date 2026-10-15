@@ -288,10 +288,13 @@ public final class Shops {
 				return InteractionResult.PASS;
 			}
 			if (hand != InteractionHand.MAIN_HAND) return InteractionResult.FAIL;
-			if (member) {
+			Account seller = ownerAccount(s);
+			if (member && seller != null && seller.ref().equals(SumeniumEco.accounts().active(p).ref())) {
+				// sa propre boutique avec le compte qui l'encaisse : on montre juste les infos
 				Msg.send(p, describe(s, true, p));
 				Msg.send(p, Msg.info(s.salesCount + " vente(s), chiffre d'affaires ").append(Msg.money(s.revenue)));
 			} else {
+				// le panneau sert aussi aux membres d'une faction qui achètent avec leur compte perso
 				customerClick(p, s);
 			}
 			return InteractionResult.SUCCESS;
@@ -756,6 +759,89 @@ public final class Shops {
 		updateSign(s);
 	}
 
+	/** Pose un panneau neuf contre le coffre (face avant d'abord) et le rattache. */
+	public boolean placeSign(Shop s) {
+		ServerLevel level = level(s);
+		if (level == null || !level.isLoaded(pos(s))) return false;
+		BlockPos pos = pos(s);
+		BlockState chest = level.getBlockState(pos);
+		List<Direction> dirs = new ArrayList<>();
+		if (chest.hasProperty(ChestBlock.FACING)) dirs.add(chest.getValue(ChestBlock.FACING));
+		else if (chest.hasProperty(BarrelBlock.FACING) && chest.getValue(BarrelBlock.FACING).getAxis().isHorizontal()) {
+			dirs.add(chest.getValue(BarrelBlock.FACING));
+		}
+		for (Direction d : Direction.Plane.HORIZONTAL) if (!dirs.contains(d)) dirs.add(d);
+		List<BlockPos> parts = new ArrayList<>(List.of(pos));
+		BlockPos other = connectedHalf(level, pos);
+		if (other != null) parts.add(other);
+		for (BlockPos part : parts) {
+			for (Direction d : dirs) {
+				BlockPos at = part.relative(d);
+				if (parts.contains(at) || !level.getBlockState(at).canBeReplaced()) continue;
+				level.setBlock(at, net.minecraft.world.level.block.Blocks.OAK_WALL_SIGN.defaultBlockState()
+						.setValue(net.minecraft.world.level.block.WallSignBlock.FACING, d), 3);
+				return attachSign(s, at);
+			}
+		}
+		BlockPos top = pos.above();
+		if (level.getBlockState(top).canBeReplaced()) {
+			level.setBlock(top, net.minecraft.world.level.block.Blocks.OAK_SIGN.defaultBlockState(), 3);
+			return attachSign(s, top);
+		}
+		return false;
+	}
+
+	private boolean attachSign(Shop s, BlockPos sign) {
+		unindexSign(s);
+		s.signX = sign.getX();
+		s.signY = sign.getY();
+		s.signZ = sign.getZ();
+		s.signCache = null;
+		index(s);
+		store.markDirty();
+		updateSign(s);
+		return s.hasSign();
+	}
+
+	/** /boutique panneau : réécrit le panneau, en retrouve un ou en pose un neuf. */
+	public boolean ensureSign(Shop s) {
+		if (s.hasSign()) {
+			s.signCache = null;
+			updateSign(s);
+			if (s.hasSign()) return true;
+		}
+		linkSign(s);
+		return s.hasSign() || placeSign(s);
+	}
+
+	/** Passe une boutique perso en boutique de faction (ou l'inverse). Renvoie un message d'erreur ou null. */
+	public String transfer(ServerPlayer p, Shop s, boolean toFaction) {
+		if (s.isFisc()) return "Les boutiques du FISC ne se transfèrent pas.";
+		PlayerData d = SumeniumEco.accounts().player(p);
+		if (toFaction) {
+			if (s.ownerType == Shop.OwnerType.FACTION) return "C'est déjà une boutique de faction.";
+			PlayerData owner = store.players.get(s.ownerId);
+			if (!s.ownerId.equals(d.uuid) && !hasBypass(p)) return "Seul le propriétaire peut la donner à sa faction.";
+			Faction f = SumeniumEco.accounts().factionOf(owner);
+			if (f == null) return "Le propriétaire n'est dans aucune faction.";
+			s.ownerType = Shop.OwnerType.FACTION;
+			s.ownerId = f.id;
+		} else {
+			if (s.ownerType == Shop.OwnerType.JOUEUR) return "C'est déjà une boutique perso.";
+			Faction f = store.factions.get(s.ownerId);
+			boolean chef = f != null && f.role(d.uuid) == Faction.Role.CHEF;
+			boolean creator = d.uuid.equals(s.creator) && f != null && f.members.containsKey(d.uuid);
+			if (!chef && !creator) return "Seuls le chef et le créateur de la boutique peuvent la reprendre en perso.";
+			s.ownerType = Shop.OwnerType.JOUEUR;
+			s.ownerId = d.uuid;
+		}
+		s.signCache = null;
+		store.markDirty();
+		updateSign(s);
+		SumeniumEco.exporter().requestExport();
+		return null;
+	}
+
 	/** Réécrit le panneau si besoin ; le détache s'il a disparu. */
 	public void updateSign(Shop s) {
 		if (!s.hasSign()) return;
@@ -970,6 +1056,7 @@ public final class Shops {
 		index(s);
 		store.markDirty();
 		linkSign(s);
+		if (!s.hasSign()) placeSign(s);
 		refreshStock(s);
 		SumeniumEco.exporter().requestExport();
 		return null;

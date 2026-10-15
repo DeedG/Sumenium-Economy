@@ -227,6 +227,33 @@ final class SelfTest {
 		check(out, !SumeniumEco.store().factions.containsKey("bac_team_test") && !SumeniumEco.store().factions.containsKey("EquipeVide")
 				&& SumeniumEco.store().factions.containsKey("EquipeTest"), "import des équipes : seulement les vraies");
 
+		// Panneau posé automatiquement quand il n'y en a pas
+		Shop planks = SumeniumEco.shops().at(level, w1);
+		check(out, planks.hasSign() && level.getBlockState(new BlockPos(planks.signX, planks.signY, planks.signZ))
+				.getBlock() instanceof net.minecraft.world.level.block.SignBlock, "panneau posé automatiquement à la création");
+
+		// Boutique donnée à la faction, puis service acheté par un membre avec son compte perso (via le panneau)
+		String terr = SumeniumEco.shops().transfer(seller, planks, true);
+		check(out, terr == null && planks.ownerType == Shop.OwnerType.FACTION && planks.ownerId.equals("EquipeTest"),
+				"boutique perso donnée à la faction " + (terr == null ? "" : terr));
+		BlockPos w3 = base.offset(4, 0, -2);
+		level.setBlock(w3, Blocks.BARREL.defaultBlockState(), 3);
+		SumeniumEco.shops().create(seller, w3, Shop.Kind.SERVICE, 30_000, 1, "Usine XP 30 min", false);
+		Shop service = SumeniumEco.shops().at(level, w3);
+		SumeniumEco.shops().transfer(seller, service, true);
+		Faction team = SumeniumEco.store().factions.get("EquipeTest");
+		long bankBefore = team.bank;
+		long sellerBefore = ds.balance;
+		BlockPos ss = new BlockPos(service.signX, service.signY, service.signZ);
+		SumeniumEco.shops().onUse(seller, level, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(ss), Direction.UP, ss, false));
+		SumeniumEco.shops().onChat(seller, "1");
+		boolean voucher = false;
+		for (int i = 0; i < seller.getInventory().getContainerSize(); i++) {
+			if (Shops.voucherId(seller.getInventory().getItem(i)) != null) voucher = true;
+		}
+		check(out, voucher && ds.balance == sellerBefore - 30_000 && team.bank == bankBefore + 30_000,
+				"bon de service acheté par un membre (perso -> banque faction)");
+
 		// Suppression par le propriétaire : remboursement 50 %
 		long b2 = ds.balance;
 		SumeniumEco.shops().remove(SumeniumEco.shops().at(level, chest), seller, true);

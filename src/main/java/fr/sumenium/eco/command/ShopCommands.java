@@ -48,6 +48,9 @@ public final class ShopCommands {
 				.then(literal("info").executes(ShopCommands::info))
 				.then(literal("liste").executes(ShopCommands::list))
 				.then(literal("supprimer").executes(ShopCommands::delete))
+				.then(literal("panneau").executes(ShopCommands::sign))
+				.then(literal("faction").executes(ctx -> transfer(ctx, true)))
+				.then(literal("perso").executes(ctx -> transfer(ctx, false)))
 				.then(literal("prix")
 						.then(argument("prix", DoubleArgumentType.doubleArg(0.01))
 								.executes(ctx -> setPrice(ctx, -1))
@@ -140,6 +143,25 @@ public final class ShopCommands {
 		if (!SumeniumEco.shops().canManage(p, s)) return Cmd.err(ctx, "Ce n'est pas ta boutique.");
 		SumeniumEco.shops().remove(s, p, true);
 		return 1;
+	}
+
+	private static int sign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		ServerPlayer p = Cmd.player(ctx);
+		Shop s = targeted(ctx, p);
+		if (s == null) return Cmd.err(ctx, "Regarde le coffre d'une boutique.");
+		if (!SumeniumEco.shops().canManage(p, s)) return Cmd.err(ctx, "Ce n'est pas ta boutique.");
+		if (!SumeniumEco.shops().ensureSign(s)) return Cmd.err(ctx, "Pas de place autour du coffre pour un panneau.");
+		return Cmd.ok(ctx, "Panneau de la boutique à jour en " + s.signX + " " + s.signY + " " + s.signZ + ".");
+	}
+
+	private static int transfer(CommandContext<CommandSourceStack> ctx, boolean toFaction) throws CommandSyntaxException {
+		ServerPlayer p = Cmd.player(ctx);
+		Shop s = targeted(ctx, p);
+		if (s == null) return Cmd.err(ctx, "Regarde le coffre d'une boutique.");
+		String error = SumeniumEco.shops().transfer(p, s, toFaction);
+		if (error != null) return Cmd.err(ctx, error);
+		return Cmd.ok(ctx, toFaction ? "La boutique appartient maintenant à la faction : tous les membres peuvent la ravitailler et les ventes vont dans la banque."
+				: "La boutique est maintenant à toi : les ventes vont sur ton compte perso.");
 	}
 
 	private static int setPrice(CommandContext<CommandSourceStack> ctx, int qty) throws CommandSyntaxException {

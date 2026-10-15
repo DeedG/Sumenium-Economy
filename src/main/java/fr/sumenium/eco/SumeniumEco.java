@@ -123,7 +123,15 @@ public final class SumeniumEco implements ModInitializer {
 		});
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> {
 			if (!ready || !(player instanceof ServerPlayer sp)) return true;
-			return shops.beforeBreak(sp, level, pos);
+			if (shops.beforeBreak(sp, level, pos)) return true;
+			// casse refusée : on renvoie le bloc et son contenu (texte du panneau) au joueur
+			sp.level().getServer().execute(() -> {
+				var current = level.getBlockState(pos);
+				level.sendBlockUpdated(pos, current, current, 3);
+				var entity = level.getBlockEntity(pos);
+				if (entity != null && entity.getUpdatePacket() != null) sp.connection.send(entity.getUpdatePacket());
+			});
+			return false;
 		});
 		PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, be) -> {
 			if (!ready || !(player instanceof ServerPlayer sp)) return;

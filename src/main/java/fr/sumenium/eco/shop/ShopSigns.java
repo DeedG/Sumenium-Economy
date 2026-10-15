@@ -95,23 +95,23 @@ final class ShopSigns {
 		Component l4;
 		switch (s.kind) {
 			case ITEM -> {
-				l3 = Component.literal(cut(s.quantity > 1 ? s.quantity + " pour " + price : "Vente : " + price));
+				l3 = Component.literal(cut(s.quantity > 1 ? s.quantity + "x " + price : price));
 				boolean empty = s.lastStock >= 0 && s.lastStock < s.quantity;
-				l4 = s.lastStock < 0 ? Component.literal("")
-						: empty ? Component.literal("Rupture").withStyle(ChatFormatting.RED)
+				l4 = s.lastStock < 0 ? Component.literal("Clic = acheter")
+						: empty ? Component.literal("Rupture").withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD)
 						: Component.literal("Stock : " + s.lastStock);
 			}
 			case SERVICE -> {
-				l3 = Component.literal(cut("Service : " + price));
-				l4 = Component.literal("Bon nominatif").withStyle(ChatFormatting.DARK_GRAY);
+				l3 = Component.literal(cut("Service " + price));
+				l4 = Component.literal("Clic = acheter").withStyle(ChatFormatting.DARK_GREEN);
 			}
 			case FISC_RACHAT -> {
-				l3 = Component.literal(cut("Rachat : " + price));
-				l4 = Component.literal("Clic pour vendre").withStyle(ChatFormatting.DARK_GRAY);
+				l3 = Component.literal(cut("Rachat " + price));
+				l4 = Component.literal("Clic = vendre").withStyle(ChatFormatting.DARK_GREEN, ChatFormatting.BOLD);
 			}
 			default -> {
-				l3 = Component.literal(cut((s.quantity > 1 ? s.quantity + " pour " : "Vente : ") + price));
-				l4 = Component.literal("Clic pour acheter").withStyle(ChatFormatting.DARK_GRAY);
+				l3 = Component.literal(cut(s.quantity > 1 ? s.quantity + "x " + price : price));
+				l4 = Component.literal("Clic = acheter").withStyle(ChatFormatting.DARK_GREEN, ChatFormatting.BOLD);
 			}
 		}
 		return new Component[] {l1, l2, l3, l4};
