@@ -164,20 +164,21 @@ public final class Factions {
 		ServerScoreboard sb = server().getScoreboard();
 		String name = p.getPlainTextName();
 		Faction f = SumeniumEco.accounts().factionOf(d);
-		if (f == null) {
-			// Ancien datapack AFK : le joueur garde un tag avec le nom de son équipe d'origine.
-			for (String tag : p.entityTags()) {
-				if (tag.startsWith(OLD_AFK_TAG)) {
-					Faction from = store.factions.get(tag.substring(OLD_AFK_TAG.length()));
-					if (from != null && !isFull(from)) {
-						addMember(d, from, Faction.Role.MEMBRE);
-						f = from;
-					}
+		// Ancien datapack AFK : le joueur garde un tag avec le nom de son équipe d'origine.
+		for (String tag : new ArrayList<>(p.entityTags())) {
+			if (!tag.startsWith(OLD_AFK_TAG)) continue;
+			String original = tag.substring(OLD_AFK_TAG.length());
+			if (f == null) {
+				Faction from = store.factions.get(original);
+				if (from != null && !isFull(from)) {
+					addMember(d, from, Faction.Role.MEMBRE);
+					f = from;
+				} else if (sb.getPlayerTeam(original) != null) {
+					// faction pas encore importée : on remet au moins le joueur dans son équipe
+					sb.addPlayerToTeam(name, sb.getPlayerTeam(original));
 				}
 			}
-		}
-		for (String tag : new ArrayList<>(p.entityTags())) {
-			if (tag.startsWith(OLD_AFK_TAG)) p.removeTag(tag);
+			p.removeTag(tag);
 		}
 		PlayerTeam current = sb.getPlayersTeam(name);
 		if (f != null) {

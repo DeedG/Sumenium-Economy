@@ -17,7 +17,9 @@ Il remplace **Savs Common Economy** et le datapack **afk display**.
    - `/sumeco zone coin1` et `/sumeco zone coin2` à deux coins de la zone commerciale, puis `/sumeco zone activer`.
 6. Vérifier les prix du FISC (ex. cuivre deepslate à 3,5) : regarder le coffre et `/fisc prix 3.5`.
 
-Le jar compilé se télécharge dans l'onglet **Actions** du dépôt (artefact `sumenium-economy`), ou en lançant `gradle build` (Java 25).
+Le jar compilé et testé est publié automatiquement sur la branche [`builds`](https://github.com/DeedG/Sumenium-Economy/tree/builds) à chaque modification. On peut aussi le compiler avec `gradle build` (Java 25).
+
+Chaque build démarre deux vrais serveurs 26.3 (sans et avec Lithium) qui jouent un scénario complet avec de faux joueurs : création de boutique, achat, rachat FISC, explosion, entonnoir, double coffre, sommeil des AFK, reprise Savs.
 
 ## Joueurs
 
@@ -33,6 +35,8 @@ Le jar compilé se télécharge dans l'onglet **Actions** du dépôt (artefact `
 | `/faction` · `info <faction>` · `liste` | Voir les factions |
 | `/faction inviter` · `rejoindre` · `quitter` · `exclure` · `role` | Gestion par le chef |
 | `/faction deposer <montant>` · `retirer <montant>` | Banque de faction (retrait : chef et trésoriers) |
+
+Les montants s'écrivent avec un point : `/boutique creer item 3.5 16`.
 
 **Acheter** : clic droit sur une boutique pour voir l'offre, second clic dans les 5 s pour acheter. L'item acheté s'affiche dans le chat et se survole.
 **Vendre au FISC** : clic droit sur le coffre du FISC avec le minerai en main (le stack), accroupi pour vendre tout l'inventaire.

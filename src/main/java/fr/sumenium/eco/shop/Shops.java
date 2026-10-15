@@ -83,8 +83,11 @@ public final class Shops {
 		if (set != null) set.remove(BlockPos.asLong(s.x, s.y, s.z));
 	}
 
+	private static final Map<Object, String> WORLD_NAMES = new java.util.IdentityHashMap<>();
+
 	public static String world(Level level) {
-		return level.dimension().identifier().toString();
+		// appelé très souvent par les entonnoirs : on évite de recréer la chaîne à chaque fois
+		return WORLD_NAMES.computeIfAbsent(level.dimension(), k -> level.dimension().identifier().toString());
 	}
 
 	private boolean indexed(Level level, BlockPos pos) {
