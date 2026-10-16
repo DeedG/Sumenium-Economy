@@ -1,6 +1,7 @@
 package fr.sumenium.eco.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import fr.sumenium.eco.SavsImport;
@@ -14,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 
+import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
 /** /sumeco : outils d'administration. */
@@ -39,7 +41,12 @@ public final class AdminCommands {
 						.append(Msg.money(SumeniumEco.accounts().moneySupply()))
 						.append(Component.literal(" — " + SumeniumEco.store().shops.size() + " boutiques, "
 								+ SumeniumEco.store().factions.size() + " factions").withStyle(ChatFormatting.YELLOW)))))
-				.then(literal("bypass").executes(AdminCommands::bypass)));
+				.then(literal("bypass").executes(AdminCommands::bypass))
+				.then(literal("surnom").executes(AdminCommands::nicknames)
+						.then(argument("joueur", StringArgumentType.word()).suggests(Cmd.PLAYERS)
+								.then(literal("retirer").executes(ctx -> nickname(ctx, null)))
+								.then(argument("surnom", StringArgumentType.greedyString())
+										.executes(ctx -> nickname(ctx, StringArgumentType.getString(ctx, "surnom")))))));
 	}
 
 	private static int importSavs(CommandContext<CommandSourceStack> ctx, boolean balances, boolean shops, boolean force) {
@@ -67,5 +74,31 @@ public final class AdminCommands {
 		boolean on = SumeniumEco.shops().toggleBypass(p);
 		return Cmd.ok(ctx, on ? "Mode gestion activé : tu ouvres et casses toutes les boutiques. /sumeco bypass pour l'arrêter."
 				: "Mode gestion désactivé : tu utilises les boutiques comme un joueur.");
+	}
+
+	private static int nickname(CommandContext<CommandSourceStack> ctx, String nick) {
+		String name = StringArgumentType.getString(ctx, "joueur");
+		fr.sumenium.eco.data.PlayerData d = Cmd.known(ctx, name);
+		if (d == null) return Cmd.err(ctx, "Joueur inconnu : " + name);
+		if (nick != null) {
+			nick = nick.strip();
+			if (nick.isEmpty() || nick.length() > 32) return Cmd.err(ctx, "Le surnom doit faire de 1 à 32 caractères.");
+		}
+		d.nickname = nick;
+		SumeniumEco.store().markDirty();
+		var server = ctx.getSource().getServer();
+		ServerPlayer online = server.getPlayerList().getPlayerByName(d.name);
+		if (online != null) fr.sumenium.eco.Nicknames.refresh(server, online);
+		return Cmd.ok(ctx, nick == null ? d.name + " n'a plus de surnom."
+				: d.name + " s'affiche maintenant « " + nick + " » dans le chat et le tab (survoler le nom montre le vrai pseudo).");
+	}
+
+	private static int nicknames(CommandContext<CommandSourceStack> ctx) {
+		var list = SumeniumEco.store().players.values().stream().filter(d -> d.nickname != null)
+				.sorted(java.util.Comparator.comparing(d -> d.name == null ? "" : d.name.toLowerCase())).toList();
+		if (list.isEmpty()) return Cmd.ok(ctx, "Aucun surnom. /sumeco surnom <joueur> <surnom> pour en donner un.");
+		Cmd.ok(ctx, "Surnoms (" + list.size() + ") :");
+		for (var d : list) ctx.getSource().sendSuccess(() -> Component.literal(" " + d.name + " → " + d.nickname).withStyle(ChatFormatting.GRAY), false);
+		return list.size();
 	}
 }

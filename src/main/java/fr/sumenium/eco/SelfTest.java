@@ -123,6 +123,12 @@ final class SelfTest {
 		FakePlayer buyer = FakePlayer.get(level, new GameProfile(UUID.fromString("00000000-0000-0000-0000-00000000000b"), "Acheteur"));
 		PlayerData ds = SumeniumEco.accounts().player(seller);
 		PlayerData db = SumeniumEco.accounts().player(buyer);
+		db.nickname = "Acheteur (2e compte)";
+		boolean nickOk = buyer.getDisplayName().getString().contains("Acheteur (2e compte)")
+				&& buyer.getPlainTextName().equals("Acheteur")
+				&& buyer.getTabListDisplayName() != null && buyer.getTabListDisplayName().getString().contains("2e compte");
+		db.nickname = null;
+		check(out, nickOk && buyer.getTabListDisplayName() == null, "surnom : chat et tab, pseudo réel inchangé");
 		ds.balance = 100_000;
 		db.balance = 50_000;
 		seller.setPos(0.5, 100, 3.5);

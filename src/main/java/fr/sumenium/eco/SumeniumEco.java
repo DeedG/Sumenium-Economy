@@ -49,6 +49,10 @@ public final class SumeniumEco implements ModInitializer {
 	private static fr.sumenium.eco.hdv.AuctionHouse hdv;
 	private static boolean ready;
 
+	public static boolean isReady() {
+		return ready;
+	}
+
 	@Override
 	public void onInitialize() {
 		Path game = gameDir();

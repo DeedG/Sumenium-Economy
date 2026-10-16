@@ -34,7 +34,7 @@ public final class Afk {
 	/** Nom affiché dans le tab pendant l'AFK (null = affichage normal avec l'équipe). */
 	public static Component tabName(ServerPlayer p) {
 		if (!isAfk(p)) return null;
-		return Component.literal("[AFK] " + p.getPlainTextName()).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
+		return Component.literal("[AFK] " + Nicknames.shown(p)).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
 	}
 
 	/** Appelé chaque seconde. */

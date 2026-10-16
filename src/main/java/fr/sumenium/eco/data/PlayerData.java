@@ -14,6 +14,8 @@ public final class PlayerData {
 	/** Si vrai, achats et créations de boutique utilisent la banque de faction. */
 	public boolean useFaction;
 	public long lastSeen;
+	/** Surnom affiché dans le chat et le tab (donné par un admin), null sinon. */
+	public String nickname;
 	/** Ventes réalisées pendant que le joueur était déconnecté (pour le récap). */
 	public int offlineSales;
 	public long offlineRevenue;
