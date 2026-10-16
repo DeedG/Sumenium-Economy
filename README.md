@@ -78,6 +78,7 @@ Admins : `/hdv pnj [retirer]`, `/hdv boite [retirer]`, `/annuaire lutrin|retirer
 | `/eco faction <faction> donner\|retirer\|definir <montant>` | Banques de faction |
 | `/faction admin creer <id> <tag> <couleur>` · `supprimer` · `ajouter` · `retirer` · `role` · `tag` · `couleur` | Factions |
 | `/sumeco bypass` | Mode gestion : ouvrir et casser toutes les boutiques (à réactiver après chaque redémarrage) |
+| `/sumeco surnom <joueur> <surnom>` · `/sumeco surnom <joueur> retirer` · `/sumeco surnom` | Surnom affiché dans le chat et le tab à la place du pseudo (ex. second compte) ; sans argument : liste des surnoms |
 | `/sumeco stats` · `exporter` · `recharger` · `importer-savs` | Outils |
 
 Par défaut, un admin est un joueur comme les autres (achats, notifications de ses propres boutiques seulement). `/sumeco bypass` active le mode gestion pour ouvrir et casser n'importe quelle boutique, et le désactive.
