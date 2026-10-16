@@ -97,12 +97,13 @@ public final class Directory {
 		return removed;
 	}
 
-	/** Le livre : une page de garde, puis 3 boutiques par page (FISC d'abord, puis par propriétaire). */
+	/** Le livre : une page de garde, puis 3 boutiques par page (par propriétaire, sans le FISC ni les boutiques cachées). */
 	public static ItemStack buildBook() {
 		Shops shops = SumeniumEco.shops();
 		List<Shop> list = new ArrayList<>(SumeniumEco.store().shops.values());
-		list.sort(Comparator.comparing((Shop s) -> s.ownerType != Shop.OwnerType.FISC)
-				.thenComparing(s -> shops.ownerName(s).toLowerCase())
+		// le FISC et les boutiques cachées n'apparaissent pas
+		list.removeIf(s -> s.isFisc() || s.hidden);
+		list.sort(Comparator.comparing((Shop s) -> shops.ownerName(s).toLowerCase())
 				.thenComparing(s -> s.itemName == null ? "" : s.itemName.toLowerCase()));
 		List<Filterable<Component>> pages = new ArrayList<>();
 		MutableComponent cover = Component.literal("ANNUAIRE\nDES BOUTIQUES\n\n").withStyle(ChatFormatting.DARK_BLUE, ChatFormatting.BOLD)

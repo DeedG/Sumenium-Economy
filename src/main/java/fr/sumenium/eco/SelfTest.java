@@ -448,6 +448,22 @@ final class SelfTest {
 		SumeniumEco.exporter().exportAll();
 		check(out, Files.exists(SumeniumEco.gameDir().resolve("sumenium-data/export/hdv.json"))
 				&& Files.exists(SumeniumEco.gameDir().resolve("sumenium-data/export/bluemap-markers.json")), "export hdv et BlueMap");
+		try {
+			Shop any = SumeniumEco.store().shops.values().stream().filter(x -> x.item != null && !x.isFisc()).findFirst().orElse(null);
+			String json = Files.readString(SumeniumEco.gameDir().resolve("sumenium-data/export/boutiques.json"));
+			boolean details = json.contains("\"details\"") && json.contains("\"composants\"");
+			boolean hiddenOk = false;
+			if (any != null) {
+				any.hidden = true;
+				SumeniumEco.exporter().exportAll();
+				hiddenOk = !Files.readString(SumeniumEco.gameDir().resolve("sumenium-data/export/boutiques.json")).contains("\"" + any.id + "\"");
+				any.hidden = false;
+				SumeniumEco.exporter().exportAll();
+			}
+			check(out, details && hiddenOk, "export : détail des items, boutique cachée absente");
+		} catch (java.io.IOException e) {
+			check(out, false, "export : lecture impossible " + e);
+		}
 
 		// Historique : dépôt en faction vu par le joueur (perso -50, banque +50)
 		fr.sumenium.eco.data.Tx dep = new fr.sumenium.eco.data.Tx();

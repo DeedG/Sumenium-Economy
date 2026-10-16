@@ -94,6 +94,7 @@ public final class Exporter {
 		JsonArray arr = new JsonArray();
 		var shops = SumeniumEco.shops();
 		for (Shop s : store.shops.values()) {
+			if (s.hidden) continue;
 			JsonObject o = new JsonObject();
 			o.addProperty("id", s.id);
 			o.addProperty("type", s.kind.name());
@@ -106,6 +107,7 @@ public final class Exporter {
 			o.addProperty("z", s.z);
 			o.addProperty("item", s.itemId);
 			o.addProperty("nom", s.itemName);
+			if (s.item != null) o.add("details", fr.sumenium.eco.util.ItemDetails.of(s.item));
 			if (s.serviceName != null) o.addProperty("service", s.serviceName);
 			o.addProperty("quantite", s.quantity);
 			o.addProperty("prix", Money.toUnits(s.price));
@@ -130,6 +132,7 @@ public final class Exporter {
 			o.addProperty("vendeur", l.sellerName);
 			o.addProperty("item", l.itemId);
 			o.addProperty("nom", l.itemName);
+			if (l.item != null) o.add("details", fr.sumenium.eco.util.ItemDetails.of(l.item));
 			o.addProperty("quantite", l.count);
 			o.addProperty("prixDepart", Money.toUnits(l.startPrice));
 			o.addProperty("achatImmediat", l.buyNow == null ? null : Money.toUnits(l.buyNow));
@@ -153,7 +156,7 @@ public final class Exporter {
 		JsonObject fiscSet = markerSet("FISC", 1);
 		var shops = SumeniumEco.shops();
 		for (Shop s : store.shops.values()) {
-			if (!"minecraft:overworld".equals(s.world)) continue;
+			if (s.hidden || !"minecraft:overworld".equals(s.world)) continue;
 			JsonObject m = new JsonObject();
 			m.addProperty("type", "poi");
 			String what = s.kind == Shop.Kind.SERVICE ? s.serviceName : s.itemName;
@@ -253,7 +256,7 @@ public final class Exporter {
 		JsonArray rachat = new JsonArray();
 		JsonArray vente = new JsonArray();
 		for (Shop s : store.shops.values()) {
-			if (!s.isFisc()) continue;
+			if (!s.isFisc() || s.hidden) continue;
 			JsonObject o = new JsonObject();
 			o.addProperty("item", s.itemId);
 			o.addProperty("nom", s.itemName);

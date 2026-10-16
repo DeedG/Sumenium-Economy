@@ -43,6 +43,8 @@ public final class Shop {
 	public long salesCount;
 	public long itemsMoved;
 	public long revenue;
+	/** Boutique cachée (admin) : absente de l'annuaire, des exports et de la carte. */
+	public boolean hidden;
 	/** Dernier stock connu en items (-1 = inconnu, ignoré pour les stocks infinis). */
 	public int lastStock = -1;
 	public boolean outOfStockNotified;

@@ -79,7 +79,9 @@ public final class ShopCommands {
 								.executes(ctx -> adminCreate(ctx, Shop.Kind.FISC_VENTE,
 										DoubleArgumentType.getDouble(ctx, "prix"), IntegerArgumentType.getInteger(ctx, "quantite"))))))
 				.then(literal("prix").then(argument("prix", DoubleArgumentType.doubleArg(0))
-						.executes(ctx -> setPrice(ctx, -1)))));
+						.executes(ctx -> setPrice(ctx, -1))))
+				.then(literal("cacher").executes(ctx -> setHidden(ctx, true)))
+				.then(literal("montrer").executes(ctx -> setHidden(ctx, false))));
 	}
 
 	private static int create(CommandContext<CommandSourceStack> ctx, Shop.Kind kind) throws CommandSyntaxException {
@@ -228,6 +230,18 @@ public final class ShopCommands {
 		SumeniumEco.store().markDirty();
 		SumeniumEco.exporter().requestExport();
 		return Cmd.ok(ctx, SumeniumEco.shops().describe(s, false));
+	}
+
+	private static int setHidden(CommandContext<CommandSourceStack> ctx, boolean hidden) throws CommandSyntaxException {
+		ServerPlayer p = Cmd.player(ctx);
+		Shop s = targeted(ctx, p);
+		if (s == null) return Cmd.err(ctx, "Regarde une boutique.");
+		s.hidden = hidden;
+		fr.sumenium.eco.shop.Directory.markDirty();
+		SumeniumEco.store().markDirty();
+		SumeniumEco.exporter().requestExport();
+		return Cmd.ok(ctx, hidden ? "Boutique cachée : elle n'apparaît plus dans l'annuaire, les exports du site ni la carte."
+				: "Boutique de nouveau visible dans les exports et sur la carte.");
 	}
 
 	private static int checkVoucher(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

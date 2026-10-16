@@ -74,6 +74,7 @@ Admins : `/hdv pnj [retirer]`, `/hdv boite [retirer]`, `/annuaire lutrin|retirer
 | `/fisc rachat <prix unitaire>` | Le coffre visé devient un point de rachat du FISC pour l'item en main |
 | `/fisc vente <prix> <quantité>` | Le FISC vend l'item en main (stock infini), ex. hopper filtre |
 | `/fisc prix <prix>` | Changer le prix d'une boutique du FISC |
+| `/fisc cacher` · `/fisc montrer` | Cacher la boutique visée : absente de l'annuaire, des exports du site et de BlueMap (ex. boutique secrète) |
 | `/eco voir\|donner\|retirer\|definir <joueur> [montant]` | Comptes joueurs |
 | `/eco faction <faction> donner\|retirer\|definir <montant>` | Banques de faction |
 | `/faction admin creer <id> <tag> <couleur>` · `supprimer` · `ajouter` · `retirer` · `role` · `tag` · `couleur` | Factions |
@@ -97,11 +98,11 @@ Par défaut, un admin est un joueur comme les autres (achats, notifications de s
 
 Tout est dans `sumenium-data/` à la racine du serveur, à récupérer en SFTP :
 
-- `export/boutiques.json` : toutes les boutiques avec coordonnées, item, prix, stock, rupture, ventes, chiffre d'affaires
+- `export/boutiques.json` : toutes les boutiques (sauf cachées) avec coordonnées, item, `details` (nom perso, enchantements, potion, lore, durabilité, `composants` complets), prix, stock, rupture, ventes, chiffre d'affaires
 - `export/factions.json`, `export/comptes.json`, `export/prix-fisc.json`
 - `export/stats.json` : argent en circulation, totaux des 7 derniers jours, top des ventes, rachats FISC
 - `export/masse-monetaire.jsonl` : un point par heure pour tracer la courbe de l'argent en circulation
-- `export/hdv.json` : annonces de l'hôtel des ventes
+- `export/hdv.json` : annonces de l'hôtel des ventes (avec `details` comme les boutiques)
 - `export/bluemap-markers.json` : boutiques, FISC et hôtel des ventes au format des marqueurs BlueMap
 - `journal/AAAA-MM-JJ.jsonl` : chaque transaction, une par ligne
 - `data/` : données internes du mod (ne pas modifier serveur allumé)
