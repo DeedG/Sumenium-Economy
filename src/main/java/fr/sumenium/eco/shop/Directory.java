@@ -115,8 +115,7 @@ public final class Directory {
 				Shop s = list.get(j);
 				if (j > i) page.append(Component.literal("\n"));
 				page.append(Component.literal(shops.ownerName(s) + "\n").withStyle(ChatFormatting.DARK_BLUE, ChatFormatting.BOLD));
-				String what = s.kind == Shop.Kind.SERVICE ? "Service : " + s.serviceName : s.itemName;
-				page.append(Component.literal(what + "\n").withStyle(ChatFormatting.BLACK));
+				page.append(itemLine(s));
 				String price = switch (s.kind) {
 					case FISC_RACHAT -> "Rachète " + Money.format(s.price) + " l'unité";
 					default -> (s.quantity > 1 ? s.quantity + " pour " : "") + Money.format(s.price);
@@ -132,5 +131,25 @@ public final class Directory {
 		book.set(DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(
 				Filterable.passThrough("Annuaire des boutiques"), "FISC", 0, pages, true));
 		return book;
+	}
+
+	/** Nom de l'item survolable (comme dans le chat) ; pour un livre enchanté, l'enchantement plutôt que « Enchanted Book ». */
+	private static MutableComponent itemLine(Shop s) {
+		if (s.kind == Shop.Kind.SERVICE) return Component.literal("Service : " + s.serviceName + "\n").withStyle(ChatFormatting.BLACK);
+		ItemStack stack = fr.sumenium.eco.util.Items.decode(s.item);
+		if (stack == null || stack.isEmpty()) return Component.literal(s.itemName + "\n").withStyle(ChatFormatting.BLACK);
+		MutableComponent name = stack.getHoverName().copy();
+		net.minecraft.world.item.enchantment.ItemEnchantments ench = stack.get(DataComponents.STORED_ENCHANTMENTS);
+		if (ench != null && !ench.isEmpty()) {
+			var entries = new ArrayList<>(ench.entrySet());
+			var first = entries.get(0);
+			name = net.minecraft.world.item.enchantment.Enchantment.getFullname(first.getKey(), first.getIntValue()).copy();
+			if (entries.size() > 1) name.append(" +" + (entries.size() - 1));
+		}
+		return Component.empty()
+				.append(name.withStyle(st -> st.withColor(ChatFormatting.DARK_AQUA).withUnderlined(true)
+						.withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowItem(
+								net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(stack)))))
+				.append(Component.literal("\n"));
 	}
 }
