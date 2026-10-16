@@ -427,6 +427,15 @@ final class SelfTest {
 		var content = lbe.getBook().get(DataComponents.WRITTEN_BOOK_CONTENT);
 		check(out, lbe.hasBook() && content != null && content.pages().size() >= 2, "annuaire : livre posé ("
 				+ (content == null ? 0 : content.pages().size()) + " pages)");
+		boolean linesOk = true;
+		for (int pi = 1; content != null && pi < content.pages().size(); pi++) {
+			String[] bl = content.pages().get(pi).raw().getString().split("\n");
+			if (bl.length > 14) linesOk = false;
+			for (String ln : bl) if (fr.sumenium.eco.shop.Directory.width(ln, false) > 114) linesOk = false;
+		}
+		String cut = fr.sumenium.eco.shop.Directory.fit("Deepslate Lapis Lazuli Ore", false);
+		check(out, linesOk && cut.endsWith("..") && fr.sumenium.eco.shop.Directory.width(cut, false) <= 114,
+				"annuaire : une ligne par info, 14 lignes max (" + cut + ")");
 		lbe.setBook(ItemStack.EMPTY);
 		fr.sumenium.eco.shop.Directory.tick();
 		check(out, lbe.hasBook(), "annuaire : livre remis s'il est pris");

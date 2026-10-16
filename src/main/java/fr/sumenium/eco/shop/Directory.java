@@ -114,16 +114,12 @@ public final class Directory {
 			for (int j = i; j < Math.min(list.size(), i + SHOPS_PER_PAGE); j++) {
 				Shop s = list.get(j);
 				if (j > i) page.append(Component.literal("\n"));
-				page.append(Component.literal(shops.ownerName(s) + "\n").withStyle(ChatFormatting.DARK_BLUE, ChatFormatting.BOLD));
+				page.append(Component.literal(fit(shops.ownerName(s), true) + "\n").withStyle(ChatFormatting.DARK_BLUE, ChatFormatting.BOLD));
 				page.append(itemLine(s));
-				String price = switch (s.kind) {
-					case FISC_RACHAT -> "Rachète " + Money.format(s.price) + " l'unité";
-					default -> (s.quantity > 1 ? s.quantity + " pour " : "") + Money.format(s.price);
-				};
 				boolean empty = s.kind == Shop.Kind.ITEM && s.lastStock >= 0 && s.lastStock < s.quantity;
-				page.append(Component.literal(price + (empty ? " (rupture)" : "") + "\n")
+				page.append(Component.literal(priceLine(s, empty) + "\n")
 						.withStyle(empty ? ChatFormatting.DARK_RED : ChatFormatting.DARK_GREEN));
-				page.append(Component.literal(s.x + " " + s.y + " " + s.z + "\n").withStyle(ChatFormatting.DARK_GRAY));
+				page.append(Component.literal(fit(s.x + " " + s.y + " " + s.z, false) + "\n").withStyle(ChatFormatting.DARK_GRAY));
 			}
 			pages.add(Filterable.passThrough(page));
 		}
@@ -133,21 +129,84 @@ public final class Directory {
 		return book;
 	}
 
+	/** Largeur utile d'une page de livre en pixels (114), avec une marge. */
+	static final int PAGE_WIDTH = 110;
+
+	/** Largeur d'un caractère dans la police vanilla (espacement compris). */
+	static int charWidth(char c, boolean bold) {
+		int w = switch (c) {
+			case 'i', '!', '.', ',', ':', ';', '|', '\'' -> 2;
+			case 'l', '`' -> 3;
+			case 'I', 't', '[', ']', ' ', ' ', ' ' -> 4;
+			case 'f', 'k', '<', '>', '"', '(', ')', '{', '}', '*' -> 5;
+			case '@', '~' -> 7;
+			default -> 6;
+		};
+		return bold ? w + 1 : w;
+	}
+
+	public static int width(String s, boolean bold) {
+		int w = 0;
+		for (int i = 0; i < s.length(); i++) w += charWidth(s.charAt(i), bold);
+		return w;
+	}
+
+	/** Coupe le texte avec « .. » pour qu'il tienne sur une seule ligne de la page. */
+	public static String fit(String s, boolean bold) {
+		return fit(s, bold, PAGE_WIDTH);
+	}
+
+	static String fit(String s, boolean bold, int limit) {
+		if (s == null) return "";
+		if (width(s, bold) <= limit) return s;
+		int max = limit - width("..", bold);
+		StringBuilder b = new StringBuilder();
+		int w = 0;
+		for (int i = 0; i < s.length(); i++) {
+			int cw = charWidth(s.charAt(i), bold);
+			if (w + cw > max) break;
+			b.append(s.charAt(i));
+			w += cw;
+		}
+		return b.toString().stripTrailing() + "..";
+	}
+
+	/** Ligne de prix, raccourcie si besoin (la couleur rouge suffit à signaler la rupture). */
+	static String priceLine(Shop s, boolean empty) {
+		String price = Money.format(s.price);
+		List<String> tries = new ArrayList<>();
+		if (s.kind == Shop.Kind.FISC_RACHAT) {
+			tries.add("Rachète " + price + " l'unité");
+			tries.add("Rachète " + price + "/u");
+			tries.add(price + "/u");
+		} else {
+			String base = (s.quantity > 1 ? s.quantity + " pour " : "") + price;
+			if (empty) tries.add(base + " (rupture)");
+			tries.add(base);
+			if (s.quantity > 1) tries.add(s.quantity + " = " + price);
+		}
+		for (String t : tries) if (width(t, false) <= PAGE_WIDTH) return t;
+		return fit(tries.get(tries.size() - 1), false);
+	}
+
 	/** Nom de l'item survolable (comme dans le chat) ; pour un livre enchanté, l'enchantement plutôt que « Enchanted Book ». */
 	private static MutableComponent itemLine(Shop s) {
-		if (s.kind == Shop.Kind.SERVICE) return Component.literal("Service : " + s.serviceName + "\n").withStyle(ChatFormatting.BLACK);
+		if (s.kind == Shop.Kind.SERVICE) return Component.literal(fit("Service : " + s.serviceName, false) + "\n").withStyle(ChatFormatting.BLACK);
 		ItemStack stack = fr.sumenium.eco.util.Items.decode(s.item);
-		if (stack == null || stack.isEmpty()) return Component.literal(s.itemName + "\n").withStyle(ChatFormatting.BLACK);
-		MutableComponent name = stack.getHoverName().copy();
+		if (stack == null || stack.isEmpty()) return Component.literal(fit(s.itemName, false) + "\n").withStyle(ChatFormatting.BLACK);
+		String name = stack.getHoverName().getString();
 		net.minecraft.world.item.enchantment.ItemEnchantments ench = stack.get(DataComponents.STORED_ENCHANTMENTS);
 		if (ench != null && !ench.isEmpty()) {
 			var entries = new ArrayList<>(ench.entrySet());
 			var first = entries.get(0);
-			name = net.minecraft.world.item.enchantment.Enchantment.getFullname(first.getKey(), first.getIntValue()).copy();
-			if (entries.size() > 1) name.append(" +" + (entries.size() - 1));
+			name = net.minecraft.world.item.enchantment.Enchantment.getFullname(first.getKey(), first.getIntValue()).getString();
+			if (entries.size() > 1) {
+				String more = " +" + (entries.size() - 1);
+				name = fit(name, false, PAGE_WIDTH - width(more, false)) + more;
+			}
 		}
 		return Component.empty()
-				.append(name.withStyle(st -> st.withColor(ChatFormatting.DARK_AQUA).withUnderlined(true)
+				.append(Component.literal(fit(name, false)).withStyle(st -> st.withColor(ChatFormatting.DARK_AQUA).withUnderlined(true)
 						.withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowItem(
 								net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(stack)))))
 				.append(Component.literal("\n"));
