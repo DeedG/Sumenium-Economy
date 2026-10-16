@@ -104,6 +104,9 @@ public final class SumeniumEco implements ModInitializer {
 				fr.sumenium.eco.shop.Directory.tick();
 			}
 			if (tick % 400 == 0) hdv.tick();
+			if (tick % 200 == 0) {
+				for (ServerPlayer p : s.getPlayerList().getPlayers()) factions.syncTeam(p, accounts.player(p));
+			}
 		});
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {

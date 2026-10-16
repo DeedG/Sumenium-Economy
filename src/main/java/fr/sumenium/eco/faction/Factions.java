@@ -181,6 +181,15 @@ public final class Factions {
 			}
 			p.removeTag(tag);
 		}
+		syncTeam(p, d);
+	}
+
+	/** Remet le joueur dans l'équipe de sa faction (recréée avec son tag si un admin l'a supprimée). */
+	public void syncTeam(ServerPlayer p, PlayerData d) {
+		if (!sync()) return;
+		ServerScoreboard sb = server().getScoreboard();
+		String name = p.getPlainTextName();
+		Faction f = SumeniumEco.accounts().factionOf(d);
 		PlayerTeam current = sb.getPlayersTeam(name);
 		if (f != null) {
 			if (current == null || !current.getName().equals(f.id)) sb.addPlayerToTeam(name, team(f));
