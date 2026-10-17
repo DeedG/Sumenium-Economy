@@ -92,7 +92,7 @@ Par défaut, un admin est un joueur comme les autres (achats, notifications de s
 - `taxeVente` : 0 = désactivée ; 0.05 = 5 % prélevés par le FISC sur chaque vente entre joueurs
 - `prixDynamiquesMode` : `aucun` (défaut), `joueur` ou `faction` ; avec `prixDynamiquesBaisseParLot`, `prixDynamiquesTailleLot`, `prixDynamiquesPlancher`, `prixDynamiquesRetourMinutes`
 - `factionMembresMax` (8), `factionCreationParJoueurs` (false), `factionMembresPeuventDepenser` (false)
-- `afkSecondes` (150), `afkIgnoresPourDormir` (true) : les AFK ne comptent pas pour la gamerule de sommeil
+- `afkSecondes` (150), `afkIgnoresPourDormir` (true) : les AFK ne comptent pas pour la gamerule de sommeil. Seuls tourner la caméra, marcher (hors véhicule et hors eau) et écrire dans le chat comptent comme activité : un autoclicker ne retire pas l’AFK
 
 ## Fichiers pour le site
 

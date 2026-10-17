@@ -512,6 +512,16 @@ final class SelfTest {
 		Afk.forget(buyer);
 		sleep.update(List.of(seller, buyer));
 		check(out, sleep.sleepersNeeded(100) == 2, "sans AFK, les deux comptent");
+		// AFK : les clics ne comptent pas, tourner la caméra si
+		Afk.forget(buyer);
+		long t0 = Afk.lastActive(buyer, 1_000_000L);
+		buyer.resetLastActionTime();
+		long t1 = Afk.lastActive(buyer, 2_000_000L);
+		buyer.setYRot(buyer.getYRot() + 30);
+		long t2 = Afk.lastActive(buyer, 3_000_000L);
+		Afk.forget(buyer);
+		check(out, t0 == 1_000_000L && t1 == 1_000_000L && t2 == 3_000_000L,
+				"AFK : clic ignoré, caméra = activité (" + t0 + "/" + t1 + "/" + t2 + ")");
 
 		// Reprise Savs avec des fichiers d'exemple
 		try {

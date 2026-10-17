@@ -142,6 +142,7 @@ public final class SumeniumEco implements ModInitializer {
 		});
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
 			if (!ready) return true;
+			Afk.activity(sender);
 			if (shops.onChat(sender, message.signedContent())) return false;
 			return !hdv.onChat(sender, message.signedContent());
 		});
