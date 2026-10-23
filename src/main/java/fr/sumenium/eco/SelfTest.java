@@ -558,6 +558,23 @@ final class SelfTest {
 				db.balance = balBefore;
 				hs.spawnNpc(seller);
 				hs.tickNpcs(server, 0);
+				// menu : les mods de tri (rafales, déplacements, maj-clic) ne déclenchent rien
+				int[] actions = {0};
+				var menu = new fr.sumenium.eco.hdv.ButtonMenu(0, buyer.getInventory(), new net.minecraft.world.SimpleContainer(54), (sp, slot) -> actions[0]++);
+				menu.clicked(3, 0, net.minecraft.world.inventory.ContainerInput.PICKUP, buyer);
+				int duringGrace = actions[0];
+				try { Thread.sleep(350); } catch (InterruptedException ignored) {}
+				menu.clicked(3, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, buyer);
+				menu.clicked(3, 0, net.minecraft.world.inventory.ContainerInput.SWAP, buyer);
+				int afterMoves = actions[0];
+				try { Thread.sleep(250); } catch (InterruptedException ignored) {}
+				menu.clicked(3, 0, net.minecraft.world.inventory.ContainerInput.PICKUP, buyer);
+				int single = actions[0];
+				try { Thread.sleep(250); } catch (InterruptedException ignored) {}
+				for (int i = 0; i < 10; i++) menu.clicked(i, 0, net.minecraft.world.inventory.ContainerInput.PICKUP, buyer);
+				int burst = actions[0] - single;
+				check(out, duringGrace == 0 && afterMoves == 0 && single == 1 && burst <= 1,
+						"menu PNJ : tri d'inventaire ignoré (ouverture " + duringGrace + ", déplacements " + afterMoves + ", clic " + single + ", rafale " + burst + ")");
 				var npcs = level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(net.minecraft.world.entity.Entity.class),
 						fr.sumenium.eco.heads.HeadShop::isNpc);
 				check(out, !npcs.isEmpty() && hs.removeNpc(seller), "têtes : PNJ placé puis retiré");
