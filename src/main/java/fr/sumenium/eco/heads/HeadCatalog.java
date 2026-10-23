@@ -337,24 +337,40 @@ public final class HeadCatalog {
 		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(b));
 	}
 
-	/** Recherche : toutes les têtes dont le nom, les tags ou la catégorie contiennent tous les mots. */
+	/**
+	 * Recherche : chaque mot tapé doit commencer un mot du nom, d'un tag ou de la catégorie.
+	 * Les têtes dont le nom correspond passent en premier.
+	 */
 	public List<Head> search(String query) {
-		String[] words = fold(query).trim().split("\\s+");
-		List<Head> out = new ArrayList<>();
+		String[] words = fold(query).trim().split("[^\\p{L}\\p{N}]+");
+		List<Head> byName = new ArrayList<>();
+		List<Head> byTag = new ArrayList<>();
 		for (Category c : snapshot.categories()) {
 			for (Head h : c.heads()) {
-				boolean all = true;
+				String[] tokens = h.search().split("[^\\p{L}\\p{N}]+");
+				String[] nameTokens = fold(h.name()).split("[^\\p{L}\\p{N}]+");
+				boolean all = true, inName = true;
 				for (String w : words) {
-					if (!w.isEmpty() && !h.search().contains(w)) {
+					if (w.isEmpty()) continue;
+					if (!startsAny(nameTokens, w)) inName = false;
+					if (!startsAny(tokens, w)) {
 						all = false;
 						break;
 					}
 				}
-				if (all) out.add(h);
+				if (all) (inName ? byName : byTag).add(h);
 			}
 		}
-		out.sort(Comparator.comparing((Head h) -> fold(h.name())).thenComparingInt(Head::id));
-		return out;
+		Comparator<Head> order = Comparator.comparing((Head h) -> fold(h.name())).thenComparingInt(Head::id);
+		byName.sort(order);
+		byTag.sort(order);
+		byName.addAll(byTag);
+		return byName;
+	}
+
+	private static boolean startsAny(String[] tokens, String w) {
+		for (String t : tokens) if (t.startsWith(w)) return true;
+		return false;
 	}
 
 	/** Pour le test de démarrage : construit un catalogue à partir de JSON en mémoire. */

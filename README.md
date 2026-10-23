@@ -67,6 +67,12 @@ Les boutiques sont protégées : seuls les membres ouvrent et cassent ; entonnoi
 
 Admins : `/hdv pnj [retirer]`, `/hdv boite [retirer]`, `/annuaire lutrin|retirer`. Réglages : `hdvAnnoncesMax` (3), `hdvDureeJours` (7), `hdvTaxe` (0.15), `hdvSurenchereMin` (0.05), `hdvProlongationMinutes` (5).
 
+## Marchand de têtes
+
+Clic droit sur le PNJ « Marchand de têtes » : plus de 100 000 têtes décoratives (catalogue HeadDB), triées par catégorie puis par nom, avec une recherche (bouton boussole, puis un mot dans le chat). Un clic sur une tête l'achète au prix unique (`tetesPrix`, 150 Su), payé au FISC.
+
+Admins : `/tetes` (état du catalogue), `/tetes pnj [retirer]`, `/tetes ouvrir` (tester le menu), `/tetes maj` (recharger le catalogue). Le catalogue est mis à jour toutes les `tetesMajHeures` (24) et gardé en cache dans `sumenium-data/tetes/`.
+
 ## Admins
 
 | Commande | Effet |

@@ -216,12 +216,16 @@ public final class HeadShop {
 		content.setItem(48, info(p));
 		content.setItem(49, button(net.minecraft.world.item.Items.PAPER, title, "Page " + (pg + 1) + "/" + pages + " — " + heads.size() + " têtes"));
 		content.setItem(50, button(net.minecraft.world.item.Items.COMPASS, "Rechercher une tête", "Clic, puis tape un mot dans le chat"));
+		if (pg >= 10) content.setItem(47, button(net.minecraft.world.item.Items.SPECTRAL_ARROW, "« 10 pages"));
+		if (pg + 10 < pages) content.setItem(51, button(net.minecraft.world.item.Items.SPECTRAL_ARROW, "10 pages »"));
 		if (pg < pages - 1) content.setItem(53, button(net.minecraft.world.item.Items.ARROW, "Page suivante »"));
 		final int current = pg;
 		String shortTitle = title.length() > 28 ? title.substring(0, 27) + "…" : title;
 		p.openMenu(new SimpleMenuProvider((id, inv, pl) -> new ButtonMenu(id, inv, content, (sp, slot) -> {
 			if (slot == 45 && current > 0) openList(sp, title, heads, current - 1, backPage);
 			else if (slot == 53 && current < pages - 1) openList(sp, title, heads, current + 1, backPage);
+			else if (slot == 47 && current >= 10) openList(sp, title, heads, current - 10, backPage);
+			else if (slot == 51 && current + 10 < pages) openList(sp, title, heads, current + 10, backPage);
 			else if (slot == 46) openCategories(sp, backPage);
 			else if (slot == 50) startSearch(sp);
 			else if (slot < PER_PAGE && at[slot] != null) {
@@ -254,14 +258,15 @@ public final class HeadShop {
 			Msg.send(p, Msg.err("Tape au moins 2 lettres."));
 			return true;
 		}
-		List<HeadCatalog.Head> found = catalog.search(q);
-		if (found.isEmpty()) {
-			Msg.send(p, Msg.err("Aucune tête trouvée pour « " + q + " ». Les noms sont souvent en anglais (ex. cat, pumpkin)."));
-			return true;
-		}
-		// le menu s'ouvre au tick suivant, sur le thread du serveur
 		var server = p.level().getServer();
-		server.execute(() -> openList(p, "Recherche : " + q, found, 0, 0));
+		// recherche hors du thread du serveur (plus de 100 000 têtes), puis menu ouvert sur le thread du serveur
+		java.util.concurrent.CompletableFuture.supplyAsync(() -> catalog.search(q)).thenAccept(found -> server.execute(() -> {
+			if (found.isEmpty()) {
+				Msg.send(p, Msg.err("Aucune tête trouvée pour « " + q + " ». Les noms sont souvent en anglais (ex. cat, pumpkin)."));
+			} else {
+				openList(p, "Recherche : " + q, found, 0, 0);
+			}
+		}));
 		return true;
 	}
 
