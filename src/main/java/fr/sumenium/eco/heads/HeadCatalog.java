@@ -63,6 +63,51 @@ public final class HeadCatalog {
 		return snapshot;
 	}
 
+	private volatile int excludedCount;
+
+	/** Nombre de têtes du catalogue écartées (déjà obtenables avec le datapack AllMobHeads, etc.). */
+	public int excludedCount() {
+		return excludedCount;
+	}
+
+	/** Empreinte comparable : minuscules, sans zéros en tête. */
+	private static String norm(String hash) {
+		String h = hash.trim().toLowerCase(Locale.ROOT);
+		int i = 0;
+		while (i < h.length() - 1 && h.charAt(i) == '0') i++;
+		return h.substring(i);
+	}
+
+	/**
+	 * Têtes jamais vendues : la liste fournie avec le mod (datapack AllMobHeads)
+	 * et, si présent, sumenium-data/tetes/exclues.txt (une empreinte ou une URL de texture par ligne).
+	 */
+	private Set<String> excludedHashes() {
+		Set<String> out = new HashSet<>();
+		try (InputStream in = HeadCatalog.class.getResourceAsStream("/sumenium-economy/tetes-exclues.txt")) {
+			if (in != null) addHashes(new String(in.readAllBytes(), StandardCharsets.UTF_8), out);
+		} catch (Exception e) {
+			SumeniumEco.LOGGER.warn("Têtes : liste d'exclusion interne illisible ({})", e.getMessage());
+		}
+		try {
+			Path extra = dir.resolve("exclues.txt");
+			if (Files.exists(extra)) addHashes(Files.readString(extra, StandardCharsets.UTF_8), out);
+		} catch (Exception e) {
+			SumeniumEco.LOGGER.warn("Têtes : exclues.txt illisible ({})", e.getMessage());
+		}
+		return out;
+	}
+
+	private static void addHashes(String text, Set<String> out) {
+		for (String line : text.split("\\R")) {
+			String l = line.trim();
+			if (l.isEmpty() || l.startsWith("#")) continue;
+			int slash = l.lastIndexOf('/');
+			if (slash >= 0) l = l.substring(slash + 1);
+			if (l.matches("[0-9a-fA-F]{16,128}")) out.add(norm(l));
+		}
+	}
+
 	public String lastError() {
 		return lastError;
 	}
@@ -165,6 +210,8 @@ public final class HeadCatalog {
 			}
 		}
 
+		Set<String> excluded = excludedHashes();
+		int skipped = 0;
 		Map<String, List<Head>> byCat = new LinkedHashMap<>();
 		Map<Integer, Head> byId = new HashMap<>();
 		for (JsonElement part : array(catalogIndex, "artifacts")) {
@@ -176,6 +223,10 @@ public final class HeadCatalog {
 				if (revoked.contains(id)) continue;
 				String hash = str(o, "texture").trim().toLowerCase(Locale.ROOT);
 				if (!hash.matches("[0-9a-f]{16,128}")) continue;
+				if (excluded.contains(norm(hash))) {
+					skipped++;
+					continue;
+				}
 				String name = nameOr(str(o, "name"), "Tête n° " + id);
 				String cat = nameOr(str(o, "category"), "autres");
 				StringBuilder search = new StringBuilder(fold(name));
@@ -200,6 +251,7 @@ public final class HeadCatalog {
 		}
 		cats.sort(Comparator.comparing(c -> fold(c.name())));
 		long rev = manifest.has("revision") ? manifest.get("revision").getAsLong() : 0;
+		excludedCount = skipped;
 		return new Snapshot(List.copyOf(cats), Map.copyOf(byId), byId.size(), rev, System.currentTimeMillis());
 	}
 

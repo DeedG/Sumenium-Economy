@@ -539,6 +539,7 @@ final class SelfTest {
 			}
 			check(out, snap.count() > 1000 && !snap.categories().isEmpty(),
 					"têtes : " + snap.count() + " têtes, " + snap.categories().size() + " catégories : " + cats);
+			check(out, true, "têtes : " + hs.catalog().excludedCount() + " têtes écartées car déjà dans AllMobHeads");
 			var found = hs.catalog().search("cat");
 			check(out, !found.isEmpty(), "têtes : recherche « cat » = " + found.size() + " résultat(s)"
 					+ (found.isEmpty() ? "" : ", ex. " + found.get(0).name()));

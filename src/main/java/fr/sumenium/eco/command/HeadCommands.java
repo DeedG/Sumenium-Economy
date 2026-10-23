@@ -50,7 +50,7 @@ public final class HeadCommands {
 		HeadCatalog c = SumeniumEco.heads().catalog();
 		HeadCatalog.Snapshot s = c.snapshot();
 		Cmd.ok(ctx, "Marchand de têtes : " + s.count() + " têtes, " + s.categories().size() + " catégories, "
-				+ Money.format(SumeniumEco.heads().price()) + " la tête"
+				+ Money.format(SumeniumEco.heads().price()) + " la tête, " + c.excludedCount() + " écartées (AllMobHeads)"
 				+ (s.loadedAt() > 0 ? " (chargé le " + Instant.ofEpochMilli(s.loadedAt()) + ")" : ""));
 		if (c.lastError() != null) Cmd.err(ctx, "Dernière mise à jour en échec : " + c.lastError());
 		return Cmd.ok(ctx, "/tetes pnj [retirer] · /tetes ouvrir (test) · /tetes maj");
