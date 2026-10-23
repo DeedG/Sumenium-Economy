@@ -104,6 +104,7 @@ public final class SumeniumEco implements ModInitializer {
 			fr.sumenium.eco.shop.Redstone.tick(s);
 			if (tick % 20 == 0) {
 				Afk.tick(s);
+				heads.tickNpcs(s, tick / 20);
 				shops.tickWatchers(s);
 			}
 			if (tick % 1200 == 0 && store.isDirty()) store.save();

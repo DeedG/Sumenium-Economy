@@ -97,6 +97,34 @@ public final class HeadShop {
 		store.markDirty();
 	}
 
+	/**
+	 * Change la tête portée par les marchands (appelé chaque seconde). Seulement si un joueur
+	 * est à moins de 48 blocs : sinon personne ne la voit et on n'envoie rien.
+	 */
+	public void tickNpcs(net.minecraft.server.MinecraftServer server, int seconds) {
+		int every = SumeniumEco.config().tetesPnjSecondes;
+		if (every <= 0 || seconds % every != 0 || store.hdv.headNpcs.isEmpty()) return;
+		List<HeadCatalog.Head> all = null;
+		for (ServerLevel level : server.getAllLevels()) {
+			String w = Shops.world(level);
+			for (HdvData.Place pl : store.hdv.headNpcs) {
+				if (pl.entity == null || !pl.world.equals(w)) continue;
+				Entity e;
+				try {
+					e = level.getEntity(UUID.fromString(pl.entity));
+				} catch (IllegalArgumentException ex) {
+					continue;
+				}
+				if (!(e instanceof Villager v) || level.getNearestPlayer(v, 48) == null) continue;
+				if (all == null) {
+					all = allHeads();
+					if (all.isEmpty()) return;
+				}
+				v.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, item(all.get(level.getRandom().nextInt(all.size()))));
+			}
+		}
+	}
+
 	/** Retire le marchand de têtes le plus proche (6 blocs). */
 	public boolean removeNpc(ServerPlayer admin) {
 		ServerLevel level = admin.level();
@@ -149,10 +177,19 @@ public final class HeadShop {
 		return st;
 	}
 
+	private HeadCatalog.Snapshot allFor;
+	private List<HeadCatalog.Head> allList = List.of();
+
+	/** Toutes les têtes (liste gardée tant que le catalogue ne change pas). */
 	private List<HeadCatalog.Head> allHeads() {
-		List<HeadCatalog.Head> all = new ArrayList<>();
-		for (HeadCatalog.Category c : catalog.snapshot().categories()) all.addAll(c.heads());
-		return all;
+		HeadCatalog.Snapshot snap = catalog.snapshot();
+		if (snap != allFor) {
+			List<HeadCatalog.Head> all = new ArrayList<>(snap.count());
+			for (HeadCatalog.Category c : snap.categories()) all.addAll(c.heads());
+			allList = all;
+			allFor = snap;
+		}
+		return allList;
 	}
 
 	// ------------------------------------------------------------------ menus

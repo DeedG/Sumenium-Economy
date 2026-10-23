@@ -65,6 +65,8 @@ public final class Config {
 	public String tetesCatalogue = "https://data.headsdb.com/manifest.json";
 	/** Mise à jour du catalogue (heures). */
 	public int tetesMajHeures = 24;
+	/** Le marchand change de tête toutes les N secondes (0 = jamais). */
+	public int tetesPnjSecondes = 2;
 
 	// --- Factions ---
 	public int factionMembresMax = 8;

@@ -71,6 +71,8 @@ Admins : `/hdv pnj [retirer]`, `/hdv boite [retirer]`, `/annuaire lutrin|retirer
 
 Clic droit sur le PNJ « Marchand de têtes » : plus de 100 000 têtes décoratives (catalogue HeadDB), triées par catégorie puis par nom, avec une recherche (bouton boussole, puis un mot dans le chat). Un clic sur une tête l'achète au prix unique (`tetesPrix`, 150 Su), payé au FISC.
 
+Le PNJ change de tête toutes les `tetesPnjSecondes` (2) secondes quand un joueur est à moins de 48 blocs.
+
 Admins : `/tetes` (état du catalogue), `/tetes pnj [retirer]`, `/tetes ouvrir` (tester le menu), `/tetes maj` (recharger le catalogue). Le catalogue est mis à jour toutes les `tetesMajHeures` (24) et gardé en cache dans `sumenium-data/tetes/`.
 
 ## Admins

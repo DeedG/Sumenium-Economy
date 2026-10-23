@@ -557,6 +557,7 @@ final class SelfTest {
 				check(out, db.balance == 0, "têtes : achat refusé sans argent");
 				db.balance = balBefore;
 				hs.spawnNpc(seller);
+				hs.tickNpcs(server, 0);
 				var npcs = level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(net.minecraft.world.entity.Entity.class),
 						fr.sumenium.eco.heads.HeadShop::isNpc);
 				check(out, !npcs.isEmpty() && hs.removeNpc(seller), "têtes : PNJ placé puis retiré");
