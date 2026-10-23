@@ -34,6 +34,7 @@ jobs:
           timeout 600 gradle runSelftest --stacktrace || true
           echo "::notice title=selftest vanilla::$(head -1 run/selftest.txt) — $(grep -c '^OK' run/selftest.txt) vérifications OK"
           grep '^ECHEC' run/selftest.txt | while IFS= read -r line; do echo "::error title=selftest vanilla::$line"; done
+          grep 'têtes' run/selftest.txt | while IFS= read -r line; do echo "::notice title=tetes::$line"; done
           grep -q "SELFTEST OK" run/selftest.txt
       - name: Test de démarrage avec Lithium (comme le serveur)
         if: always()
