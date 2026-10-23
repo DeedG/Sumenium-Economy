@@ -523,6 +523,46 @@ final class SelfTest {
 		check(out, t0 == 1_000_000L && t1 == 1_000_000L && t2 == 3_000_000L,
 				"AFK : clic ignoré, caméra = activité (" + t0 + "/" + t1 + "/" + t2 + ")");
 
+		// Marchand de têtes : vrai catalogue HeadDB téléchargé
+		{
+			var hs = SumeniumEco.heads();
+			try {
+				hs.catalog().refresh();
+			} catch (Exception e) {
+				check(out, false, "têtes : téléchargement du catalogue (" + e + ")");
+			}
+			var snap = hs.catalog().snapshot();
+			StringBuilder cats = new StringBuilder();
+			for (int i = 0; i < Math.min(6, snap.categories().size()); i++) {
+				var c = snap.categories().get(i);
+				cats.append(c.name()).append(" (").append(c.heads().size()).append(") ");
+			}
+			check(out, snap.count() > 1000 && !snap.categories().isEmpty(),
+					"têtes : " + snap.count() + " têtes, " + snap.categories().size() + " catégories : " + cats);
+			var found = hs.catalog().search("cat");
+			check(out, !found.isEmpty(), "têtes : recherche « cat » = " + found.size() + " résultat(s)"
+					+ (found.isEmpty() ? "" : ", ex. " + found.get(0).name()));
+			if (snap.count() > 0) {
+				var h = snap.categories().get(0).heads().get(0);
+				long before = db.balance;
+				db.useFaction = false;
+				db.balance = 1_000_000;
+				hs.buy(buyer, h);
+				ItemStack given = fr.sumenium.eco.heads.HeadShop.item(h);
+				var prof = given.get(DataComponents.PROFILE);
+				check(out, db.balance == 1_000_000 - hs.price() && prof != null && !prof.partialProfile().properties().get("textures").isEmpty(),
+						"têtes : achat à " + hs.price() / 100 + " Su, tête texturée (" + h.name() + ", solde " + db.balance + ")");
+				db.balance = 0;
+				hs.buy(buyer, h);
+				check(out, db.balance == 0, "têtes : achat refusé sans argent");
+				db.balance = before;
+				hs.spawnNpc(seller);
+				var npcs = level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(net.minecraft.world.entity.Entity.class),
+						fr.sumenium.eco.heads.HeadShop::isNpc);
+				check(out, !npcs.isEmpty() && hs.removeNpc(seller), "têtes : PNJ placé puis retiré");
+			}
+		}
+
 		// Reprise Savs avec des fichiers d'exemple
 		try {
 			var dir = SumeniumEco.gameDir().resolve("config/savs-common-economy");

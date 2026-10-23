@@ -231,6 +231,7 @@ public final class AccountCommands {
 			case Tx.HDV_OFFRE -> "Offre HDV";
 			case Tx.HDV_REMBOURSEMENT -> "Offre HDV rendue";
 			case Tx.HDV_VENTE -> "Vente HDV";
+			case Tx.ACHAT_TETE -> "Tête";
 			default -> tx.type;
 		};
 	}

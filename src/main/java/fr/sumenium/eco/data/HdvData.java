@@ -36,4 +36,6 @@ public final class HdvData {
 	public List<Place> npcs = new ArrayList<>();
 	public List<Place> mailboxBlocks = new ArrayList<>();
 	public List<Place> lecterns = new ArrayList<>();
+	/** PNJ marchands de têtes. */
+	public List<Place> headNpcs = new ArrayList<>();
 }

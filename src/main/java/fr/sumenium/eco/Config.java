@@ -58,6 +58,14 @@ public final class Config {
 	/** Une offre dans les dernières minutes prolonge l'enchère de ce nombre de minutes (anti dernière seconde). */
 	public int hdvProlongationMinutes = 5;
 
+	// --- Marchand de têtes ---
+	/** Prix d'une tête (Su). */
+	public double tetesPrix = 150;
+	/** Catalogue de têtes (format HeadDB). */
+	public String tetesCatalogue = "https://data.headsdb.com/manifest.json";
+	/** Mise à jour du catalogue (heures). */
+	public int tetesMajHeures = 24;
+
 	// --- Factions ---
 	public int factionMembresMax = 8;
 	/** Les joueurs peuvent créer une faction eux-mêmes (sinon admins seulement). */

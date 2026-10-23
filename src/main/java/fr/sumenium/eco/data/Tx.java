@@ -18,6 +18,7 @@ public final class Tx {
 	public static final String HDV_OFFRE = "HDV_OFFRE";
 	public static final String HDV_REMBOURSEMENT = "HDV_REMBOURSEMENT";
 	public static final String HDV_VENTE = "HDV_VENTE";
+	public static final String ACHAT_TETE = "ACHAT_TETE";
 
 	/** Horodatage (ms epoch). */
 	public long t;

@@ -47,6 +47,7 @@ public final class SumeniumEco implements ModInitializer {
 	private static Shops shops;
 	private static Exporter exporter;
 	private static fr.sumenium.eco.hdv.AuctionHouse hdv;
+	private static fr.sumenium.eco.heads.HeadShop heads;
 	private static boolean ready;
 
 	public static boolean isReady() {
@@ -66,6 +67,7 @@ public final class SumeniumEco implements ModInitializer {
 		shops = new Shops(store);
 		exporter = new Exporter(data.resolve("export"));
 		hdv = new fr.sumenium.eco.hdv.AuctionHouse(store);
+		heads = new fr.sumenium.eco.heads.HeadShop(store, new fr.sumenium.eco.heads.HeadCatalog(data.resolve("tetes")));
 
 		CommandRegistrationCallback.EVENT.register((dispatcher, registry, selection) -> {
 			AccountCommands.register(dispatcher);
@@ -73,6 +75,7 @@ public final class SumeniumEco implements ModInitializer {
 			FactionCommands.register(dispatcher);
 			AdminCommands.register(dispatcher);
 			fr.sumenium.eco.command.HdvCommands.register(dispatcher);
+			fr.sumenium.eco.command.HeadCommands.register(dispatcher);
 		});
 
 		ServerLifecycleEvents.SERVER_STARTED.register(s -> {
@@ -82,6 +85,7 @@ public final class SumeniumEco implements ModInitializer {
 			txlog.loadRecent();
 			shops.rebuildIndex();
 			ready = true;
+			if (!SelfTest.enabled()) heads.catalog().start();
 			exporter.requestExport();
 			if (SelfTest.enabled()) SelfTest.run(s);
 		});
@@ -90,6 +94,7 @@ public final class SumeniumEco implements ModInitializer {
 			for (ServerPlayer p : s.getPlayerList().getPlayers()) accounts.player(p).lastSeen = System.currentTimeMillis();
 			store.save();
 			exporter.exportAll();
+			heads.catalog().stop();
 			ready = false;
 		});
 
@@ -143,6 +148,7 @@ public final class SumeniumEco implements ModInitializer {
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
 			if (!ready) return true;
 			Afk.activity(sender);
+			if (heads.onChat(sender, message.signedContent())) return false;
 			if (shops.onChat(sender, message.signedContent())) return false;
 			return !hdv.onChat(sender, message.signedContent());
 		});
@@ -174,12 +180,16 @@ public final class SumeniumEco implements ModInitializer {
 
 		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
 			if (!ready || level.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
+			if (fr.sumenium.eco.heads.HeadShop.isNpc(entity)) {
+				if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) heads.openCategories(sp, 0);
+				return InteractionResult.SUCCESS;
+			}
 			if (!fr.sumenium.eco.hdv.AuctionHouse.isNpc(entity)) return InteractionResult.PASS;
 			if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) hdv.openMenu(sp, 0, false);
 			return InteractionResult.SUCCESS;
 		});
 		net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
-			if (!ready || !fr.sumenium.eco.hdv.AuctionHouse.isNpc(entity)) return InteractionResult.PASS;
+			if (!ready || !(fr.sumenium.eco.hdv.AuctionHouse.isNpc(entity) || fr.sumenium.eco.heads.HeadShop.isNpc(entity))) return InteractionResult.PASS;
 			return InteractionResult.FAIL;
 		});
 
@@ -229,6 +239,10 @@ public final class SumeniumEco implements ModInitializer {
 
 	public static Shops shops() {
 		return shops;
+	}
+
+	public static fr.sumenium.eco.heads.HeadShop heads() {
+		return heads;
 	}
 
 	public static fr.sumenium.eco.hdv.AuctionHouse hdv() {
