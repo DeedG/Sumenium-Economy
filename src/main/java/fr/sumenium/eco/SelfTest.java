@@ -544,7 +544,7 @@ final class SelfTest {
 					+ (found.isEmpty() ? "" : ", ex. " + found.get(0).name()));
 			if (snap.count() > 0) {
 				var h = snap.categories().get(0).heads().get(0);
-				long before = db.balance;
+				long balBefore = db.balance;
 				db.useFaction = false;
 				db.balance = 1_000_000;
 				hs.buy(buyer, h);
@@ -555,7 +555,7 @@ final class SelfTest {
 				db.balance = 0;
 				hs.buy(buyer, h);
 				check(out, db.balance == 0, "têtes : achat refusé sans argent");
-				db.balance = before;
+				db.balance = balBefore;
 				hs.spawnNpc(seller);
 				var npcs = level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(net.minecraft.world.entity.Entity.class),
 						fr.sumenium.eco.heads.HeadShop::isNpc);
